@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Survival Mini-Game</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      display: block;
+      background: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    // Player properties
+    const player = {
+      x: canvas.width / 2 - 25,
+      y: canvas.height - 60,
+      width: 50,
+      height: 50,
+      color: 'blue',
+      speed: 7,
+      dx: 0
+    };
+
+    // Obstacles array
+    const obstacles = [];
+    const obstacleSpeed = 5;
+    let score = 0;
+
+    // Key controls
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft') player.dx = -player.speed;
+      if (e.key === 'ArrowRight') player.dx = player.speed;
+    });
+
+    document.addEventListener('keyup', () => {
+      player.dx = 0;
+    });
+
+    // Create obstacles
+    function createObstacle() {
+      const width = Math.random() * 100 + 20;
+      const x = Math.random() * (canvas.width - width);
+      obstacles.push({ x, y: 0, width, height: 20, color: 'red' });
+    }
+
+    // Update game objects
+    function update() {
+      // Move player
+      player.x += player.dx;
+      if (player.x < 0) player.x = 0;
+      if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+
+      // Move obstacles
+      obstacles.forEach((obstacle, index) => {
+        obstacle.y += obstacleSpeed;
+        if (obstacle.y > canvas.height) {
+          obstacles.splice(index, 1);
+          score++;
+        }
+
+        // Collision detection
+        if (
+          player.x < obstacle.x + obstacle.width &&
+          player.x + player.width > obstacle.x &&
+          player.y < obstacle.y + obstacle.height &&
+          player.y + player.height > obstacle.y
+        ) {
+          alert(`Game Over! Your score: ${score}`);
+          document.location.reload();
+        }
+      });
+
+      // Add new obstacles
+      if (Math.random() < 0.02) createObstacle();
+    }
+
+    // Draw game objects
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw player
+      ctx.fillStyle = player.color;
+      ctx.fillRect(player.x, player.y, player.width, player.height);
+
+      // Draw obstacles
+      obstacles.forEach((obstacle) => {
+        ctx.fillStyle = obstacle.color;
+        ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+      });
+
+      // Draw score
+      ctx.fillStyle = 'black';
+      ctx.font = '20px Arial';
+      ctx.fillText(`Score: ${score}`, 10, 30);
+    }
+
+    // Game loop
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    gameLoop();
+  </script>
+</body>
+</html>

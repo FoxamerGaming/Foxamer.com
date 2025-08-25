@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>3D Survival Forest Adventure</title>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  </head>
+  <body>
+    <a-scene>
+      <!-- Sky -->
+      <a-sky color="#87CEEB"></a-sky>
+
+      <!-- Ground -->
+      <a-plane position="0 0 0" rotation="-90 0 0" width="100" height="100" color="#228B22"></a-plane>
+
+      <!-- Trees -->
+      <a-cylinder position="-5 1 -10" radius="0.5" height="4" color="#8B4513"></a-cylinder>
+      <a-sphere position="-5 3 -10" radius="1.5" color="#228B22"></a-sphere>
+
+      <a-cylinder position="3 1 -8" radius="0.5" height="4" color="#8B4513"></a-cylinder>
+      <a-sphere position="3 3 -8" radius="1.5" color="#228B22"></a-sphere>
+
+      <!-- Player -->
+      <a-camera position="0 1.6 5">
+        <a-entity cursor="rayOrigin: mouse"></a-entity>
+      </a-camera>
+
+      <!-- Collectible Item -->
+      <a-box id="collectible" position="0 1 -5" depth="0.5" height="0.5" width="0.5" color="#FFD700"></a-box>
+
+      <!-- Interaction Script -->
+      <script>
+        document.querySelector('#collectible').addEventListener('click', function () {
+          this.setAttribute('visible', false);
+          alert('You collected the item! Survive and explore further!');
+        });
+      </script>
+    </a-scene>
+  </body>
+</html>
