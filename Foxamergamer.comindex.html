@@ -1,15 +1,147 @@
-
-<a href="Games1.html">Game1</a>
-
-<a href="Game2.html">Game2</a>
-
-<a href="Game3.html">Game3</a>
-
-<a href="Game4.html">Game4</a>
-
-<a href="Game5.html">Game5</a>
-
-<a href="Game6.html">Game6</a>
-
-
-<p>All Created Games!</p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Foxamer Gaming Arcade</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Press+Start+2P&display=swap');
+        body {
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            font-family: 'Orbitron', Arial, sans-serif;
+            background: linear-gradient(rgba(24,24,48,0.95),rgba(34,0,51,0.90)),
+                        url('https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=1500&q=80') no-repeat center center/cover;
+            color: #fff;
+        }
+        header {
+            background: rgba(15, 8, 38, 0.94);
+            padding: 1.5em 0 1em 0;
+            text-align: center;
+            border-bottom: 2px solid #6417fd;
+            box-shadow: 0 4px 20px #9053fda8;
+        }
+        header h1 {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 2.5em;
+            letter-spacing: 2px;
+            color: #41ffe9;
+            text-shadow: 0 0 15px #9f17fd, 0 0 25px #6417fd;
+        }
+        header p {
+            margin-top: 0.5em;
+            color: #fff;
+            font-size: 1.1em;
+            letter-spacing: 1px;
+        }
+        .games-container {
+            max-width: 900px;
+            margin: 3em auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2em;
+            justify-content: center;
+        }
+        .game-card {
+            background: rgba(34, 0, 51, 0.88);
+            border: 2px solid #41ffe9;
+            border-radius: 18px;
+            padding: 2em 2em 1.5em 2em;
+            width: 220px;
+            text-align: center;
+            box-shadow: 0 0 18px #6417fd, 0 0 4px #41ffe9;
+            transition: transform 0.22s, box-shadow 0.22s;
+            cursor: pointer;
+            position: relative;
+        }
+        .game-card:hover {
+            transform: translateY(-10px) scale(1.05);
+            box-shadow: 0 0 32px #41ffe9, 0 0 8px #6417fd;
+            background: rgba(100, 23, 253, 0.95);
+        }
+        .game-card a {
+            color: #fff;
+            text-decoration: none;
+            font-family: 'Orbitron', Arial, sans-serif;
+            font-size: 1.3em;
+            font-weight: bold;
+            letter-spacing: 1px;
+            display: block;
+            margin-bottom: 0.5em;
+            text-shadow: 0 0 6px #41ffe9, 0 0 12px #6417fd;
+        }
+        .game-label {
+            background: #41ffe9;
+            color: #2a0066;
+            font-size: 0.82em;
+            font-family: 'Press Start 2P', cursive;
+            border-radius: 10px;
+            padding: 0.25em 0.7em;
+            margin-top: 0.5em;
+            display: inline-block;
+            box-shadow: 0 2px 8px #17fdb3;
+            letter-spacing: 1px;
+        }
+        .footer {
+            text-align: center;
+            padding: 2em 0 1.2em 0;
+            color: #9f17fd;
+            font-size: 1em;
+            background: rgba(15, 8, 38, 0.94);
+            border-top: 2px solid #41ffe9;
+            margin-top: 3em;
+            font-family: 'Orbitron', Arial, sans-serif;
+        }
+        /* Responsive Design */
+        @media (max-width: 700px) {
+            .games-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            .game-card {
+                width: 90%;
+                margin-bottom: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Foxamer Gaming Arcade</h1>
+        <p>Play, Discover, and Enjoy New Games!<br>
+           Dive into mass entertainment and join the fun!</p>
+    </header>
+    <main>
+        <div class="games-container">
+            <div class="game-card">
+                <a href="Games1.html">Play Game 1</a>
+                <span class="game-label">Peace</span>
+            </div>
+            <div class="game-card">
+                <a href="Game2.html">Play Game 2</a>
+                <span class="game-label">Action</span>
+            </div>
+            <div class="game-card">
+                <a href="Game3.html">Play Game 3</a>
+                <span class="game-label">Weponry</span>
+            </div>
+            <div class="game-card">
+                <a href="Game4.html">Play Game 4</a>
+                <span class="game-label">Adventure</span>
+            </div>
+            <div class="game-card">
+                <a href="Game5.html">Play Game 5</a>
+                <span class="game-label">Multiplayer</span>
+            </div>
+            <div class="game-card">
+                <a href="Game6.html">Play Game 6</a>
+                <span class="game-label">New Release!</span>
+            </div>
+        </div>
+        <div class="footer">
+            <p>All Created Games! | Mass Engagement & Entertainment | FoxamerGaming &copy; 2025</p>
+        </div>
+    </main>
+</body>
+</html>
