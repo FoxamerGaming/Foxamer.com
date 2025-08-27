@@ -1,253 +1,140 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Arcane Wilds VR - Enhanced Graphics</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/aframe-environment-component@1.3.1/dist/aframe-environment-component.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
-    <style>
-      #ui {
-        position: fixed;
-        top: 12px;
-        left: 12px;
-        color: #fff;
-        background: rgba(30,30,30,0.7);
-        padding: 10px 16px;
-        border-radius: 8px;
-        font-family: Arial, sans-serif;
-        z-index: 10;
-        min-width: 220px;
-      }
-      #ui h3 { margin: 0 0 6px 0; }
-      #ui ul { padding-left: 20px; margin: 0; }
-      #ui small { color: #ccc; font-size: 12px; }
-      #missions {
-        margin-top: 10px;
-        background: rgba(0,0,0,0.3);
-        padding: 8px;
-        border-radius: 6px;
-      }
-      #missions b {
-        color: #9cf;
-      }
-    </style>
-  </head>
-  <body>
-    <div id="ui">
-      <h3>Arcane Wilds VR</h3>
-      <b>Health:</b> <span id="health">100</span><br>
-      <b>Hunger:</b> <span id="hunger">100</span><br>
-      <b>Thirst:</b> <span id="thirst">100</span><br>
-      <b>Inventory:</b>
-      <ul id="invList"><li>Herb (demo)</li></ul>
-      <div id="missions">
-        <b>Mission:</b>
-        <div id="missionText"></div>
-        <div id="missionStatus"></div>
-      </div>
-      <small>
-        Move: WASD / VR Joystick<br>
-        Jump: Space / A Button<br>
-        Cast Fireball: Click / Trigger<br>
-        Pick up: Walk into objects
-      </small>
+<head>
+  <meta charset="UTF-8">
+  <title>Magical World VR Adventure</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- A-Frame for VR support -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; background: #101020; }
+    #ui-overlay {
+      position: fixed;
+      left: 0; right: 0; bottom: 0;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      pointer-events: none;
+    }
+    #hotbar {
+      display: flex;
+      gap: 12px;
+      background: rgba(30,30,40,0.85);
+      border-radius: 10px;
+      padding: 8px 20px;
+      margin-bottom: 8px;
+      box-shadow: 0 0 8px #a2e8ff;
+    }
+    .hotbar-slot {
+      width: 40px; height: 40px;
+      background: #222;
+      border: 2px solid #73f5b4;
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      color: #caf0fa; font-family: monospace;
+      font-size: 22px;
+      image-rendering: pixelated;
+      box-shadow: 0 0 4px #5ee1ff;
+    }
+    #crafting {
+      width: 300px;
+      background: rgba(58,28,68,0.95);
+      margin-bottom: 10px;
+      border-radius: 8px;
+      color: #f9e8ff;
+      font-family: monospace;
+      padding: 8px;
+      box-shadow: 0 0 10px #b366ff;
+      font-size: 14px;
+      image-rendering: pixelated;
+    }
+    #quest {
+      position: fixed;
+      top: 18px; right: 18px;
+      background: rgba(30,30,40,0.95);
+      color: #fffcd4;
+      border-radius: 10px;
+      padding: 14px 20px;
+      font-family: monospace;
+      font-size: 16px;
+      z-index: 3;
+      box-shadow: 0 0 10px #f8e041;
+      max-width: 300px;
+      image-rendering: pixelated;
+    }
+  </style>
+</head>
+<body>
+  <!-- UI Overlay -->
+  <div id="ui-overlay">
+    <div id="hotbar">
+      <div class="hotbar-slot" title="Wooden Staff">🪄</div>
+      <div class="hotbar-slot" title="Apple">🍎</div>
+      <div class="hotbar-slot" title="Sword">🗡️</div>
+      <div class="hotbar-slot" title="Backpack">🎒</div>
+      <div class="hotbar-slot" title="Crafting">🛠️</div>
     </div>
-    <a-scene
-      environment="preset: forest; skyType: atmosphere; lighting: distant; groundTexture: walk; ground: hills; dressing: trees, rocks, mushrooms, grass, flowers; dressingAmount: 48; fog: 0.8"
-      shadow="type: pcfsoft"
-      renderer="colorManagement: true; physicallyCorrectLights: true; shadowMapType: pcfsoft; pixelRatio: 2"
-      vr-mode-ui="enabled: true"
-      embedded>
-      <!-- High-res Skybox -->
-      <a-assets>
-        <img id="skyTexture" src="https://cdn.aframe.io/360-image-gallery-boilerplate/img/sechelt.jpg">
-        <!-- Realistic trees and rocks -->
-        <a-asset-item id="treeModel" src="https://cdn.aframe.io/test-models/models/tree/scene.gltf"></a-asset-item>
-        <a-asset-item id="rockModel" src="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models/2.0/Rock/glTF/Rock.gltf"></a-asset-item>
-        <a-asset-item id="mushroomModel" src="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models/2.0/Mushroom/glTF/Mushroom.gltf"></a-asset-item>
-        <a-asset-item id="stoneModel" src="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models/2.0/Stone/glTF/Stone.gltf"></a-asset-item>
-      </a-assets>
-      <a-sky src="#skyTexture" rotation="0 -90 0"></a-sky>
-      <!-- Extra detailed environment -->
-      <a-entity gltf-model="#treeModel" scale="1.2 1.2 1.2" position="5 0 -12"></a-entity>
-      <a-entity gltf-model="#treeModel" scale="1.3 1.3 1.3" position="-7 0 -14"></a-entity>
-      <a-entity gltf-model="#treeModel" scale="1.1 1.1 1.1" position="10 0 -12"></a-entity>
-      <a-entity gltf-model="#rockModel" scale="0.8 0.8 0.8" position="2 0 -4"></a-entity>
-      <a-entity gltf-model="#rockModel" scale="0.6 0.6 0.6" position="-2 0 -7"></a-entity>
-      <a-entity gltf-model="#mushroomModel" scale="0.3 0.3 0.3" position="1 0 -1.2"></a-entity>
-      <a-entity gltf-model="#mushroomModel" scale="0.4 0.4 0.4" position="3 0 -2.5"></a-entity>
-      <a-entity gltf-model="#mushroomModel" scale="0.2 0.2 0.2" position="-3 0 -3"></a-entity>
-      <!-- Pickable Stone for mission -->
-      <a-entity id="stone" gltf-model="#stoneModel" scale="0.5 0.5 0.5" position="0 0.5 -3" class="pickup"></a-entity>
-      <!-- PLAYER RIG (First Person) -->
-      <a-entity id="rig" movement-controls="fly: false; speed: 0.18"
-                position="0 1.6 7"
-                wasd-controls="acceleration: 45">
-        <a-entity id="playercam" camera
-                  look-controls="pointerLockEnabled: true; touchEnabled: true"
-                  position="0 0 0"
-                  wasd-controls
-                  ></a-entity>
-        <a-entity laser-controls="hand: right"></a-entity>
-        <a-entity hand-controls="hand: left"></a-entity>
-        <a-entity hand-controls="hand: right"></a-entity>
-      </a-entity>
-      <!-- FIREBALL TEMPLATE -->
-      <a-entity id="fireball-template" geometry="primitive: sphere; radius: 0.13"
-        material="color: orange; emissive: #ff8800; metalness: 0.35; roughness: 0.3"
-        visible="false"></a-entity>
-      <!-- LIGHTS -->
-      <a-entity light="type: directional; castShadow: true; intensity: 1.3; shadowCameraTop: 10; shadowCameraBottom: -10; shadowCameraLeft: -10; shadowCameraRight: 10" position="2 8 2"></a-entity>
-      <a-entity light="type: ambient; intensity: 0.5"></a-entity>
-    </a-scene>
-    <script>
-      // Survival and inventory system
-      let stats = { health: 100, hunger: 100, thirst: 100 };
-      let inventory = ['Herb (demo)'];
-      let lastUpdate = performance.now();
+    <div id="crafting">
+      <b>Crafting Bench</b><br>
+      - <b>Wooden Staff</b>: Stick + Magic Crystal<br>
+      - <b>Fire Orb</b>: Fire Essence + Crystal<br>
+      - <b>Health Potion</b>: Red Herb + Water Flask<br>
+      <i>Collect resources to unlock more recipes!</i>
+    </div>
+  </div>
+  <div id="quest">
+    <b>Quest:</b> Awaken in the jungle. Survive, gather resources, and defeat 2 monsters.<br>
+    <b>Tip:</b> Explore to learn spells!
+  </div>
 
-      function updateUI() {
-        document.getElementById('health').textContent = Math.round(stats.health);
-        document.getElementById('hunger').textContent = Math.round(stats.hunger);
-        document.getElementById('thirst').textContent = Math.round(stats.thirst);
-        const invList = document.getElementById('invList');
-        invList.innerHTML = '';
-        inventory.forEach(item => {
-          const li = document.createElement('li');
-          li.textContent = item;
-          invList.appendChild(li);
-        });
-      }
-      updateUI();
-
-      // Survival stats decrease over time
-      function statsLoop() {
-        let now = performance.now();
-        let dt = (now - lastUpdate)/1000;
-        lastUpdate = now;
-        stats.hunger -= dt * 0.5;
-        stats.thirst -= dt * 0.8;
-        if (stats.hunger <= 0 || stats.thirst <= 0) stats.health -= dt * 2.5;
-        stats.hunger = Math.max(0, Math.min(100, stats.hunger));
-        stats.thirst = Math.max(0, Math.min(100, stats.thirst));
-        stats.health = Math.max(0, Math.min(100, stats.health));
-        updateUI();
-        requestAnimationFrame(statsLoop);
-      }
-      statsLoop();
-
-      // Fireball magic system (click/tap or VR trigger)
-      const scene = document.querySelector('a-scene');
-      const rig = document.querySelector('#rig');
-      const fireballTemplate = document.querySelector('#fireball-template');
-      function shootFireball() {
-        // Clone fireball at camera position
-        const cam = rig.querySelector('[camera]');
-        const camWorldPos = new THREE.Vector3();
-        cam.object3D.getWorldPosition(camWorldPos);
-        const dir = new THREE.Vector3();
-        cam.object3D.getWorldDirection(dir);
-        let fb = fireballTemplate.cloneNode();
-        fb.setAttribute('visible', 'true');
-        fb.setAttribute('position',
-          `${camWorldPos.x + dir.x*0.5} ${camWorldPos.y} ${camWorldPos.z + dir.z*0.5}`);
-        fb.setAttribute('dynamic-body', 'mass:0.1');
-        scene.appendChild(fb);
-        // Launch it forward
-        setTimeout(() => {
-          if (fb.body) {
-            fb.body.velocity.set(dir.x*9, dir.y*9, dir.z*9);
-          }
-        }, 80);
-        // Remove after 2 seconds
-        setTimeout(() => { if (fb.parentNode) fb.parentNode.removeChild(fb); }, 2000);
-      }
-
-      // Mouse click (desktop) or trigger (VR)
-      window.addEventListener('mousedown', (e) => { shootFireball(); });
-      scene.addEventListener('triggerdown', (e) => { shootFireball(); });
-
-      // Missions System
-      const missions = [
-        {
-          text: "Find and collect the magic stone.",
-          objective: () => inventory.includes("Magic Stone"),
-          complete: false,
-          reward: () => { stats.health = Math.min(100, stats.health + 20); }
-        },
-        {
-          text: "Cast a fireball spell.",
-          objective: () => window.fireballCastCount > 0,
-          complete: false,
-          reward: () => { stats.hunger = Math.min(100, stats.hunger + 15); }
-        }
-      ];
-      let currentMission = 0;
-      let missionText = document.getElementById('missionText');
-      let missionStatus = document.getElementById('missionStatus');
-      missionText.textContent = missions[0].text;
-      missionStatus.textContent = "";
-
-      function advanceMission() {
-        if (currentMission < missions.length - 1) {
-          currentMission++;
-          missionText.textContent = missions[currentMission].text;
-          missionStatus.textContent = "";
-        } else {
-          missionText.textContent = "All missions complete!";
-          missionStatus.textContent = "You are a true survivor!";
-        }
-      }
-
-      // Inventory and Pickup
-      // For demo, stone is "Magic Stone" for mission
-      scene.addEventListener('loaded', function() {
-        const stone = document.getElementById('stone');
-        function checkPickup() {
-          const rigPos = new THREE.Vector3();
-          rig.object3D.getWorldPosition(rigPos);
-          const stonePos = new THREE.Vector3();
-          stone.object3D.getWorldPosition(stonePos);
-          const dist = rigPos.distanceTo(stonePos);
-          if (dist < 0.9 && stone.getAttribute('visible')) {
-            inventory.push('Magic Stone');
-            updateUI();
-            stone.setAttribute('visible', false);
-            // Mission check
-            if (missions[0] && !missions[0].complete && missions[0].objective()) {
-              missions[0].complete = true;
-              missions[0].reward();
-              missionStatus.textContent = "Mission complete! (Health +20)";
-              setTimeout(advanceMission, 2200);
-            }
-          }
-          requestAnimationFrame(checkPickup);
-        }
-        checkPickup();
+  <!-- VR Scene -->
+  <a-scene background="color: #7ec8e3">
+    <!-- Jungle ground -->
+    <a-plane position="0 0 0" rotation="-90 0 0" width="40" height="40" color="#3e8040" shadow="receive:true"></a-plane>
+    <!-- Trees -->
+    <a-cylinder position="-3 1 2" radius="0.35" height="2" color="#7b4428"></a-cylinder>
+    <a-sphere position="-3 2.5 2" radius="1.2" color="#2bde45"></a-sphere>
+    <a-cylinder position="2 1 -3" radius="0.35" height="2.2" color="#7b4428"></a-cylinder>
+    <a-sphere position="2 3 -3" radius="1.3" color="#24c862"></a-sphere>
+    <!-- Pixelated effect: blocky rocks & plants -->
+    <a-box position="1 0.5 1" width="0.8" height="0.5" depth="0.7" color="#c8b9a6"></a-box>
+    <a-box position="-2 0.3 -2" width="0.5" height="0.3" depth="0.5" color="#fff69b"></a-box>
+    <a-box position="3 0.2 3" width="0.3" height="0.2" depth="0.3" color="#a9ffa4"></a-box>
+    <!-- Monsters (level 1-3) -->
+    <a-entity id="monster1" geometry="primitive: box" material="color: #ed3e3e" position="5 0.5 0"></a-entity>
+    <a-entity id="monster2" geometry="primitive: box" material="color: #f7c53b" position="-5 0.5 2"></a-entity>
+    <a-entity id="monster3" geometry="primitive: box" material="color: #3b8cf7" position="0 0.5 -6"></a-entity>
+    <!-- Player camera + controls -->
+    <a-entity camera look-controls wasd-controls position="0 1.6 8"></a-entity>
+    <!-- Magical region portals (expandable) -->
+    <a-ring position="10 0.1 0" rotation="-90 0 0" radius-inner="0.8" radius-outer="1.2" color="#ffb76b"></a-ring>
+    <a-entity text="value: Desert Portal; color: #fff; align: center" position="10 1 0"></a-entity>
+    <a-ring position="-10 0.1 0" rotation="-90 0 0" radius-inner="0.8" radius-outer="1.2" color="#6bb8ff"></a-ring>
+    <a-entity text="value: Frost Portal; color: #fff; align: center" position="-10 1 0"></a-entity>
+    <!-- Empire Castle (end goal, far away) -->
+    <a-box position="0 2 20" width="10" height="4" depth="4" color="#d0c6f7"></a-box>
+    <a-cylinder position="3 4 20" radius="1" height="3" color="#6e7fff"></a-cylinder>
+    <a-cylinder position="-3 4 20" radius="1" height="3" color="#6e7fff"></a-cylinder>
+    <a-entity text="value: Empire Castle; color: #fff; align: center" position="0 6 20"></a-entity>
+    <!-- Vibrant light -->
+    <a-entity light="type: ambient; color: #fff; intensity: 0.5"></a-entity>
+    <a-entity light="type: directional; color: #ffe0aa; intensity: 1" position="0 10 0"></a-entity>
+  </a-scene>
+  <!-- Game Logic (basic) -->
+  <script>
+    // Simple quest progress
+    let monstersDefeated = 0;
+    document.querySelectorAll('[id^=monster]').forEach(monster => {
+      monster.addEventListener('click', () => {
+        monster.setAttribute('visible', 'false');
+        monstersDefeated++;
+        document.getElementById('quest').innerHTML = monstersDefeated < 2
+          ? `<b>Quest:</b> Defeat ${2 - monstersDefeated} more monsters!`
+          : `<b>Quest:</b> Find a magical portal to discover new spells!`;
       });
-
-      // Fireball mission tracking
-      window.fireballCastCount = 0;
-      function fireballProgress() {
-        if (missions[1] && !missions[1].complete && missions[1].objective()) {
-          missions[1].complete = true;
-          missions[1].reward();
-          missionStatus.textContent = "Mission complete! (Hunger +15)";
-          setTimeout(advanceMission, 2200);
-        }
-      }
-      // Hook fireball counter
-      (function(){
-        const origShoot = shootFireball;
-        window.shootFireball = function(){
-          window.fireballCastCount++;
-          fireballProgress();
-          origShoot();
-        }
-      })();
-
-    </script>
-  </body>
+    });
+    // More scripting can be added here for crafting, backpack, portals, etc.
+  </script>
+</body>
 </html>
