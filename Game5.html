@@ -3,8 +3,9 @@
   <head>
     <title>3D Survival Forest Adventure</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <!-- Add A-Frame Extras for orbit-controls and animation-mixer -->
+    <script src="https://unpkg.com/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
     <style>
-      /* Simple Inventory Bar Styles */
       #inventory-bar {
         position: fixed;
         bottom: 30px;
@@ -46,31 +47,82 @@
       <div class="inventory-item empty" id="inv-slot-1">–</div>
       <div class="inventory-item empty" id="inv-slot-2">–</div>
     </div>
-    <a-scene>
-      <!-- Sky -->
-      <a-sky color="#87CEEB"></a-sky>
+    <a-scene shadow="type: pcfsoft">
+      <!-- Lighting: Sun and Ambient -->
+      <a-entity light="type:ambient; intensity:0.5"></a-entity>
+      <a-entity light="type:directional; intensity:1; castShadow:true" position="10 20 10"></a-entity>
 
-      <!-- Ground -->
-      <a-plane position="0 0 0" rotation="-90 0 0" width="10000" height="100" color="#228B22"></a-plane>
+      <!-- Enhanced Sky -->
+      <a-sky src="https://cdn.aframe.io/360-image-gallery-boilerplate/img/sechelt.jpg"></a-sky>
 
-      <!-- Trees -->
-      <a-cylinder position="-5 1 -10" radius="0.5" height="4" color="#8B4513"></a-cylinder>
-      <a-sphere position="-5 3 -10" radius="1.5" color="#228B22"></a-sphere>
-      <a-cylinder position="-20 1 -15" radius="0.5" height="4" color="#8B4513"></a-cylinder>
-      <a-sphere position="-20 3 -15" radius="1.5" color="#228B22"></a-sphere>
+      <!-- Ground with grass texture -->
+      <a-plane position="0 0 0" rotation="-90 0 0" width="10000" height="100"
+        src="https://cdn.pixabay.com/photo/2017/01/20/00/30/grass-1995051_1280.jpg"
+        repeat="10000 100" shadow="receive:true"></a-plane>
 
-      <a-cylinder position="3 1 -8" radius="0.5" height="4" color="#8B4513"></a-cylinder>
-      <a-sphere position="3 3 -8" radius="1.5" color="#228B22"></a-sphere>
+      <!-- Improved Trees with bark + leaves textures, more detail -->
+      <a-cylinder position="-5 2 -10" radius="0.5" height="4" color="#8B4513"
+        src="https://cdn.pixabay.com/photo/2016/03/05/19/02/abstract-1238247_1280.jpg" shadow="cast:true"></a-cylinder>
+      <a-sphere position="-5 4 -10" radius="1.6"
+        src="https://cdn.pixabay.com/photo/2017/02/20/15/32/leaf-2088085_1280.jpg"
+        color="#228B22" shadow="cast:true"></a-sphere>
 
-      <!-- Player -->
-      <a-camera position="0 1.6 5">
-        <a-entity cursor="rayOrigin: mouse"></a-entity>
-      </a-camera>
+      <a-cylinder position="-20 2 -15" radius="0.5" height="4" color="#8B4513"
+        src="https://cdn.pixabay.com/photo/2016/03/05/19/02/abstract-1238247_1280.jpg" shadow="cast:true"></a-cylinder>
+      <a-sphere position="-20 4 -15" radius="1.6"
+        src="https://cdn.pixabay.com/photo/2017/02/20/15/32/leaf-2088085_1280.jpg"
+        color="#228B22" shadow="cast:true"></a-sphere>
 
-      <!-- Collectible Item -->
-      <a-box id="collectible" position="0 1 -5" depth="0.5" height="0.5" width="0.5" color="#FFD700"></a-box>
+      <a-cylinder position="3 2 -8" radius="0.5" height="4" color="#8B4513"
+        src="https://cdn.pixabay.com/photo/2016/03/05/19/02/abstract-1238247_1280.jpg" shadow="cast:true"></a-cylinder>
+      <a-sphere position="3 4 -8" radius="1.6"
+        src="https://cdn.pixabay.com/photo/2017/02/20/15/32/leaf-2088085_1280.jpg"
+        color="#228B22" shadow="cast:true"></a-sphere>
 
-      <!-- Interaction Script -->
+      <!-- Add a rock for variety -->
+      <a-sphere position="2 0.5 -6" radius="0.6" color="#888" roughness="1" shadow="cast:true"></a-sphere>
+
+      <!-- Third Person Player (simple capsule with face) -->
+      <a-entity id="player" position="0 0.5 5" shadow="cast:true">
+        <!-- Body -->
+        <a-cylinder height="1.2" radius="0.3" color="#c49c6e"
+          roughness="0.7" position="0 0.6 0"></a-cylinder>
+        <!-- Head -->
+        <a-sphere radius="0.35" color="#ffe0b2" position="0 1.5 0"></a-sphere>
+        <!-- Face (simple) -->
+        <a-circle radius="0.08" color="#333" position="0 1.58 0.33"></a-circle>
+        <!-- Add simple arms -->
+        <a-cylinder radius="0.08" height="0.5" color="#c49c6e"
+          position="-0.38 1.05 0" rotation="0 0 40"></a-cylinder>
+        <a-cylinder radius="0.08" height="0.5" color="#c49c6e"
+          position="0.38 1.05 0" rotation="0 0 -40"></a-cylinder>
+      </a-entity>
+
+      <!-- Third Person Camera (orbiting behind player) -->
+      <a-entity id="third-person-camera"
+        camera="fov: 75"
+        orbit-controls="
+          target: #player;
+          autoRotate: false;
+          minDistance: 2;
+          maxDistance: 5;
+          initialPosition: 0 2 4;
+          enableDamping: true;
+          dampingFactor: 0.1;
+        "
+        position="0 2 10"
+        look-at="#player">
+      </a-entity>
+
+      <!-- Collectible Item: Animated Gold Bar -->
+      <a-box id="collectible" position="0 1 -5" depth="0.5" height="0.3" width="1"
+        color="#FFD700" roughness="0.2" metalness="0.8" shadow="cast:true"
+        animation="property: rotation; to: 0 360 0; loop: true; dur: 2000">
+        <!-- Optional: sparkle effect with a mini emissive sphere -->
+        <a-sphere radius="0.08" position="0 0.3 0" color="#fff" material="emissive: #fff; emissiveIntensity: 1"></a-sphere>
+      </a-box>
+
+      <!-- Interaction & Inventory Script -->
       <script>
         // Inventory logic
         const inventory = [null, null, null]; // 3 slots
@@ -95,3 +147,56 @@
           name: "Gold Bar",
           icon: "🟨"
         };
+
+        document.addEventListener('DOMContentLoaded', function () {
+          updateInventoryBar();
+
+          document.querySelector('#collectible').addEventListener('click', function () {
+            // Find first empty slot
+            let added = false;
+            for (let i = 0; i < inventory.length; i++) {
+              if (!inventory[i]) {
+                inventory[i] = collectibleItem;
+                added = true;
+                break;
+              }
+            }
+            updateInventoryBar();
+            this.setAttribute('visible', false);
+            if (added) {
+              alert('You collected a Gold Bar! Check your inventory below.');
+            } else {
+              alert('Inventory full! Could not collect item.');
+            }
+          });
+
+          // Simple 3rd person movement with arrow keys / WASD
+          document.addEventListener('keydown', function(e) {
+            const player = document.getElementById('player');
+            const pos = player.getAttribute('position');
+            const step = 0.2;
+            switch (e.key.toLowerCase()) {
+              case 'arrowup':
+              case 'w':
+                pos.z -= step;
+                break;
+              case 'arrowdown':
+              case 's':
+                pos.z += step;
+                break;
+              case 'arrowleft':
+              case 'a':
+                pos.x -= step;
+                break;
+              case 'arrowright':
+              case 'd':
+                pos.x += step;
+                break;
+            }
+            player.setAttribute('position', pos);
+          });
+        });
+      </script>
+    </a-scene>
+  </body>
+</html>
