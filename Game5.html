@@ -1,202 +1,253 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
-    <title>3D Survival Forest Adventure</title>
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <!-- Add A-Frame Extras for orbit-controls and animation-mixer -->
-    <script src="https://unpkg.com/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
+    <meta charset="UTF-8" />
+    <title>Arcane Wilds VR - Enhanced Graphics</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/aframe-environment-component@1.3.1/dist/aframe-environment-component.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
     <style>
-      #inventory-bar {
+      #ui {
         position: fixed;
-        bottom: 30px;
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex;
-        gap: 20px;
-        background: rgba(30, 30, 30, 0.7);
-        border-radius: 10px;
-        padding: 10px 30px;
+        top: 12px;
+        left: 12px;
+        color: #fff;
+        background: rgba(30,30,30,0.7);
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-family: Arial, sans-serif;
         z-index: 10;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+        min-width: 220px;
       }
-      .inventory-item {
-        width: 40px;
-        height: 40px;
-        background: #333;
-        border: 2px solid #FFD700;
+      #ui h3 { margin: 0 0 6px 0; }
+      #ui ul { padding-left: 20px; margin: 0; }
+      #ui small { color: #ccc; font-size: 12px; }
+      #missions {
+        margin-top: 10px;
+        background: rgba(0,0,0,0.3);
+        padding: 8px;
         border-radius: 6px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #FFD700;
-        font-size: 1.2em;
-        font-family: monospace;
-        transition: background 0.2s;
       }
-      .inventory-item.empty {
-        border: 2px dashed #aaa;
-        background: #222;
-        color: #888;
+      #missions b {
+        color: #9cf;
       }
     </style>
   </head>
   <body>
-    <!-- Inventory Bar -->
-    <div id="inventory-bar">
-      <div class="inventory-item empty" id="inv-slot-0">–</div>
-      <div class="inventory-item empty" id="inv-slot-1">–</div>
-      <div class="inventory-item empty" id="inv-slot-2">–</div>
+    <div id="ui">
+      <h3>Arcane Wilds VR</h3>
+      <b>Health:</b> <span id="health">100</span><br>
+      <b>Hunger:</b> <span id="hunger">100</span><br>
+      <b>Thirst:</b> <span id="thirst">100</span><br>
+      <b>Inventory:</b>
+      <ul id="invList"><li>Herb (demo)</li></ul>
+      <div id="missions">
+        <b>Mission:</b>
+        <div id="missionText"></div>
+        <div id="missionStatus"></div>
+      </div>
+      <small>
+        Move: WASD / VR Joystick<br>
+        Jump: Space / A Button<br>
+        Cast Fireball: Click / Trigger<br>
+        Pick up: Walk into objects
+      </small>
     </div>
-    <a-scene shadow="type: pcfsoft">
-      <!-- Lighting: Sun and Ambient -->
-      <a-entity light="type:ambient; intensity:0.5"></a-entity>
-      <a-entity light="type:directional; intensity:1; castShadow:true" position="10 20 10"></a-entity>
-
-      <!-- Enhanced Sky -->
-      <a-sky src="https://cdn.aframe.io/360-image-gallery-boilerplate/img/sechelt.jpg"></a-sky>
-
-      <!-- Ground with grass texture -->
-      <a-plane position="0 0 0" rotation="-90 0 0" width="10000" height="100"
-        src="https://cdn.pixabay.com/photo/2017/01/20/00/30/grass-1995051_1280.jpg"
-        repeat="10000 100" shadow="receive:true"></a-plane>
-
-      <!-- Improved Trees with bark + leaves textures, more detail -->
-      <a-cylinder position="-5 2 -10" radius="0.5" height="4" color="#8B4513"
-        src="https://cdn.pixabay.com/photo/2016/03/05/19/02/abstract-1238247_1280.jpg" shadow="cast:true"></a-cylinder>
-      <a-sphere position="-5 4 -10" radius="1.6"
-        src="https://cdn.pixabay.com/photo/2017/02/20/15/32/leaf-2088085_1280.jpg"
-        color="#228B22" shadow="cast:true"></a-sphere>
-
-      <a-cylinder position="-20 2 -15" radius="0.5" height="4" color="#8B4513"
-        src="https://cdn.pixabay.com/photo/2016/03/05/19/02/abstract-1238247_1280.jpg" shadow="cast:true"></a-cylinder>
-      <a-sphere position="-20 4 -15" radius="1.6"
-        src="https://cdn.pixabay.com/photo/2017/02/20/15/32/leaf-2088085_1280.jpg"
-        color="#228B22" shadow="cast:true"></a-sphere>
-
-      <a-cylinder position="3 2 -8" radius="0.5" height="4" color="#8B4513"
-        src="https://cdn.pixabay.com/photo/2016/03/05/19/02/abstract-1238247_1280.jpg" shadow="cast:true"></a-cylinder>
-      <a-sphere position="3 4 -8" radius="1.6"
-        src="https://cdn.pixabay.com/photo/2017/02/20/15/32/leaf-2088085_1280.jpg"
-        color="#228B22" shadow="cast:true"></a-sphere>
-
-      <!-- Add a rock for variety -->
-      <a-sphere position="2 0.5 -6" radius="0.6" color="#888" roughness="1" shadow="cast:true"></a-sphere>
-
-      <!-- Third Person Player (simple capsule with face) -->
-      <a-entity id="player" position="0 0.5 5" shadow="cast:true">
-        <!-- Body -->
-        <a-cylinder height="1.2" radius="0.3" color="#c49c6e"
-          roughness="0.7" position="0 0.6 0"></a-cylinder>
-        <!-- Head -->
-        <a-sphere radius="0.35" color="#ffe0b2" position="0 1.5 0"></a-sphere>
-        <!-- Face (simple) -->
-        <a-circle radius="0.08" color="#333" position="0 1.58 0.33"></a-circle>
-        <!-- Add simple arms -->
-        <a-cylinder radius="0.08" height="0.5" color="#c49c6e"
-          position="-0.38 1.05 0" rotation="0 0 40"></a-cylinder>
-        <a-cylinder radius="0.08" height="0.5" color="#c49c6e"
-          position="0.38 1.05 0" rotation="0 0 -40"></a-cylinder>
+    <a-scene
+      environment="preset: forest; skyType: atmosphere; lighting: distant; groundTexture: walk; ground: hills; dressing: trees, rocks, mushrooms, grass, flowers; dressingAmount: 48; fog: 0.8"
+      shadow="type: pcfsoft"
+      renderer="colorManagement: true; physicallyCorrectLights: true; shadowMapType: pcfsoft; pixelRatio: 2"
+      vr-mode-ui="enabled: true"
+      embedded>
+      <!-- High-res Skybox -->
+      <a-assets>
+        <img id="skyTexture" src="https://cdn.aframe.io/360-image-gallery-boilerplate/img/sechelt.jpg">
+        <!-- Realistic trees and rocks -->
+        <a-asset-item id="treeModel" src="https://cdn.aframe.io/test-models/models/tree/scene.gltf"></a-asset-item>
+        <a-asset-item id="rockModel" src="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models/2.0/Rock/glTF/Rock.gltf"></a-asset-item>
+        <a-asset-item id="mushroomModel" src="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models/2.0/Mushroom/glTF/Mushroom.gltf"></a-asset-item>
+        <a-asset-item id="stoneModel" src="https://cdn.jsdelivr.net/gh/KhronosGroup/glTF-Sample-Models/2.0/Stone/glTF/Stone.gltf"></a-asset-item>
+      </a-assets>
+      <a-sky src="#skyTexture" rotation="0 -90 0"></a-sky>
+      <!-- Extra detailed environment -->
+      <a-entity gltf-model="#treeModel" scale="1.2 1.2 1.2" position="5 0 -12"></a-entity>
+      <a-entity gltf-model="#treeModel" scale="1.3 1.3 1.3" position="-7 0 -14"></a-entity>
+      <a-entity gltf-model="#treeModel" scale="1.1 1.1 1.1" position="10 0 -12"></a-entity>
+      <a-entity gltf-model="#rockModel" scale="0.8 0.8 0.8" position="2 0 -4"></a-entity>
+      <a-entity gltf-model="#rockModel" scale="0.6 0.6 0.6" position="-2 0 -7"></a-entity>
+      <a-entity gltf-model="#mushroomModel" scale="0.3 0.3 0.3" position="1 0 -1.2"></a-entity>
+      <a-entity gltf-model="#mushroomModel" scale="0.4 0.4 0.4" position="3 0 -2.5"></a-entity>
+      <a-entity gltf-model="#mushroomModel" scale="0.2 0.2 0.2" position="-3 0 -3"></a-entity>
+      <!-- Pickable Stone for mission -->
+      <a-entity id="stone" gltf-model="#stoneModel" scale="0.5 0.5 0.5" position="0 0.5 -3" class="pickup"></a-entity>
+      <!-- PLAYER RIG (First Person) -->
+      <a-entity id="rig" movement-controls="fly: false; speed: 0.18"
+                position="0 1.6 7"
+                wasd-controls="acceleration: 45">
+        <a-entity id="playercam" camera
+                  look-controls="pointerLockEnabled: true; touchEnabled: true"
+                  position="0 0 0"
+                  wasd-controls
+                  ></a-entity>
+        <a-entity laser-controls="hand: right"></a-entity>
+        <a-entity hand-controls="hand: left"></a-entity>
+        <a-entity hand-controls="hand: right"></a-entity>
       </a-entity>
+      <!-- FIREBALL TEMPLATE -->
+      <a-entity id="fireball-template" geometry="primitive: sphere; radius: 0.13"
+        material="color: orange; emissive: #ff8800; metalness: 0.35; roughness: 0.3"
+        visible="false"></a-entity>
+      <!-- LIGHTS -->
+      <a-entity light="type: directional; castShadow: true; intensity: 1.3; shadowCameraTop: 10; shadowCameraBottom: -10; shadowCameraLeft: -10; shadowCameraRight: 10" position="2 8 2"></a-entity>
+      <a-entity light="type: ambient; intensity: 0.5"></a-entity>
+    </a-scene>
+    <script>
+      // Survival and inventory system
+      let stats = { health: 100, hunger: 100, thirst: 100 };
+      let inventory = ['Herb (demo)'];
+      let lastUpdate = performance.now();
 
-      <!-- Third Person Camera (orbiting behind player) -->
-      <a-entity id="third-person-camera"
-        camera="fov: 75"
-        orbit-controls="
-          target: #player;
-          autoRotate: false;
-          minDistance: 2;
-          maxDistance: 5;
-          initialPosition: 0 2 4;
-          enableDamping: true;
-          dampingFactor: 0.1;
-        "
-        position="0 2 10"
-        look-at="#player">
-      </a-entity>
+      function updateUI() {
+        document.getElementById('health').textContent = Math.round(stats.health);
+        document.getElementById('hunger').textContent = Math.round(stats.hunger);
+        document.getElementById('thirst').textContent = Math.round(stats.thirst);
+        const invList = document.getElementById('invList');
+        invList.innerHTML = '';
+        inventory.forEach(item => {
+          const li = document.createElement('li');
+          li.textContent = item;
+          invList.appendChild(li);
+        });
+      }
+      updateUI();
 
-      <!-- Collectible Item: Animated Gold Bar -->
-      <a-box id="collectible" position="0 1 -5" depth="0.5" height="0.3" width="1"
-        color="#FFD700" roughness="0.2" metalness="0.8" shadow="cast:true"
-        animation="property: rotation; to: 0 360 0; loop: true; dur: 2000">
-        <!-- Optional: sparkle effect with a mini emissive sphere -->
-        <a-sphere radius="0.08" position="0 0.3 0" color="#fff" material="emissive: #fff; emissiveIntensity: 1"></a-sphere>
-      </a-box>
+      // Survival stats decrease over time
+      function statsLoop() {
+        let now = performance.now();
+        let dt = (now - lastUpdate)/1000;
+        lastUpdate = now;
+        stats.hunger -= dt * 0.5;
+        stats.thirst -= dt * 0.8;
+        if (stats.hunger <= 0 || stats.thirst <= 0) stats.health -= dt * 2.5;
+        stats.hunger = Math.max(0, Math.min(100, stats.hunger));
+        stats.thirst = Math.max(0, Math.min(100, stats.thirst));
+        stats.health = Math.max(0, Math.min(100, stats.health));
+        updateUI();
+        requestAnimationFrame(statsLoop);
+      }
+      statsLoop();
 
-      <!-- Interaction & Inventory Script -->
-      <script>
-        // Inventory logic
-        const inventory = [null, null, null]; // 3 slots
+      // Fireball magic system (click/tap or VR trigger)
+      const scene = document.querySelector('a-scene');
+      const rig = document.querySelector('#rig');
+      const fireballTemplate = document.querySelector('#fireball-template');
+      function shootFireball() {
+        // Clone fireball at camera position
+        const cam = rig.querySelector('[camera]');
+        const camWorldPos = new THREE.Vector3();
+        cam.object3D.getWorldPosition(camWorldPos);
+        const dir = new THREE.Vector3();
+        cam.object3D.getWorldDirection(dir);
+        let fb = fireballTemplate.cloneNode();
+        fb.setAttribute('visible', 'true');
+        fb.setAttribute('position',
+          `${camWorldPos.x + dir.x*0.5} ${camWorldPos.y} ${camWorldPos.z + dir.z*0.5}`);
+        fb.setAttribute('dynamic-body', 'mass:0.1');
+        scene.appendChild(fb);
+        // Launch it forward
+        setTimeout(() => {
+          if (fb.body) {
+            fb.body.velocity.set(dir.x*9, dir.y*9, dir.z*9);
+          }
+        }, 80);
+        // Remove after 2 seconds
+        setTimeout(() => { if (fb.parentNode) fb.parentNode.removeChild(fb); }, 2000);
+      }
 
-        function updateInventoryBar() {
-          for (let i = 0; i < inventory.length; i++) {
-            const slot = document.getElementById('inv-slot-' + i);
-            if (inventory[i]) {
-              slot.textContent = inventory[i].icon;
-              slot.classList.remove('empty');
-              slot.title = inventory[i].name;
-            } else {
-              slot.textContent = '–';
-              slot.classList.add('empty');
-              slot.title = '';
+      // Mouse click (desktop) or trigger (VR)
+      window.addEventListener('mousedown', (e) => { shootFireball(); });
+      scene.addEventListener('triggerdown', (e) => { shootFireball(); });
+
+      // Missions System
+      const missions = [
+        {
+          text: "Find and collect the magic stone.",
+          objective: () => inventory.includes("Magic Stone"),
+          complete: false,
+          reward: () => { stats.health = Math.min(100, stats.health + 20); }
+        },
+        {
+          text: "Cast a fireball spell.",
+          objective: () => window.fireballCastCount > 0,
+          complete: false,
+          reward: () => { stats.hunger = Math.min(100, stats.hunger + 15); }
+        }
+      ];
+      let currentMission = 0;
+      let missionText = document.getElementById('missionText');
+      let missionStatus = document.getElementById('missionStatus');
+      missionText.textContent = missions[0].text;
+      missionStatus.textContent = "";
+
+      function advanceMission() {
+        if (currentMission < missions.length - 1) {
+          currentMission++;
+          missionText.textContent = missions[currentMission].text;
+          missionStatus.textContent = "";
+        } else {
+          missionText.textContent = "All missions complete!";
+          missionStatus.textContent = "You are a true survivor!";
+        }
+      }
+
+      // Inventory and Pickup
+      // For demo, stone is "Magic Stone" for mission
+      scene.addEventListener('loaded', function() {
+        const stone = document.getElementById('stone');
+        function checkPickup() {
+          const rigPos = new THREE.Vector3();
+          rig.object3D.getWorldPosition(rigPos);
+          const stonePos = new THREE.Vector3();
+          stone.object3D.getWorldPosition(stonePos);
+          const dist = rigPos.distanceTo(stonePos);
+          if (dist < 0.9 && stone.getAttribute('visible')) {
+            inventory.push('Magic Stone');
+            updateUI();
+            stone.setAttribute('visible', false);
+            // Mission check
+            if (missions[0] && !missions[0].complete && missions[0].objective()) {
+              missions[0].complete = true;
+              missions[0].reward();
+              missionStatus.textContent = "Mission complete! (Health +20)";
+              setTimeout(advanceMission, 2200);
             }
           }
+          requestAnimationFrame(checkPickup);
         }
+        checkPickup();
+      });
 
-        // Item definition
-        const collectibleItem = {
-          name: "Gold Bar",
-          icon: "🟨"
-        };
+      // Fireball mission tracking
+      window.fireballCastCount = 0;
+      function fireballProgress() {
+        if (missions[1] && !missions[1].complete && missions[1].objective()) {
+          missions[1].complete = true;
+          missions[1].reward();
+          missionStatus.textContent = "Mission complete! (Hunger +15)";
+          setTimeout(advanceMission, 2200);
+        }
+      }
+      // Hook fireball counter
+      (function(){
+        const origShoot = shootFireball;
+        window.shootFireball = function(){
+          window.fireballCastCount++;
+          fireballProgress();
+          origShoot();
+        }
+      })();
 
-        document.addEventListener('DOMContentLoaded', function () {
-          updateInventoryBar();
-
-          document.querySelector('#collectible').addEventListener('click', function () {
-            // Find first empty slot
-            let added = false;
-            for (let i = 0; i < inventory.length; i++) {
-              if (!inventory[i]) {
-                inventory[i] = collectibleItem;
-                added = true;
-                break;
-              }
-            }
-            updateInventoryBar();
-            this.setAttribute('visible', false);
-            if (added) {
-              alert('You collected a Gold Bar! Check your inventory below.');
-            } else {
-              alert('Inventory full! Could not collect item.');
-            }
-          });
-
-          // Simple 3rd person movement with arrow keys / WASD
-          document.addEventListener('keydown', function(e) {
-            const player = document.getElementById('player');
-            const pos = player.getAttribute('position');
-            const step = 0.2;
-            switch (e.key.toLowerCase()) {
-              case 'arrowup':
-              case 'w':
-                pos.z -= step;
-                break;
-              case 'arrowdown':
-              case 's':
-                pos.z += step;
-                break;
-              case 'arrowleft':
-              case 'a':
-                pos.x -= step;
-                break;
-              case 'arrowright':
-              case 'd':
-                pos.x += step;
-                break;
-            }
-            player.setAttribute('position', pos);
-          });
-        });
-      </script>
-    </a-scene>
+    </script>
   </body>
 </html>
