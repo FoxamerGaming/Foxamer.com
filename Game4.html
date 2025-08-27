@@ -3,118 +3,370 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Survival Mini-Game</title>
+  <title>Sumo Fighter Mini-Game</title>
   <style>
     body {
       margin: 0;
       overflow: hidden;
       font-family: Arial, sans-serif;
+      background: #151515;
     }
     canvas {
       display: block;
-      background: #f0f0f0;
+      background: #222;
+      box-shadow: 0 0 40px #000b, 0 0 0 10px #d2b48c inset;
     }
   </style>
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
-
   <script>
+    // Images (replace these URLs with your own assets for better graphics)
+    const ringImg = new Image();
+    ringImg.src = "https://i.imgur.com/Pv5QfZ6.png"; // Sumo ring background (placeholder)
+    const playerImg = new Image();
+    playerImg.src = "https://i.imgur.com/Fr7s7n4.png"; // Sumo fighter player (placeholder)
+    const enemyImg = new Image();
+    enemyImg.src = "https://i.imgur.com/3iL9q1v.png"; // Sumo fighter enemy (placeholder)
+
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    // Player properties
-    const player = {
-      x: canvas.width / 2 - 25,
-      y: canvas.height - 60,
-      width: 50,
-      height: 50,
-      color: 'blue',
-      speed: 7,
-      dx: 0
+    // Sumo Ring properties
+    const ring = {
+      x: canvas.width / 2,
+      y: canvas.height / 2 + 40,
+      radius: Math.min(canvas.width, canvas.height) * 0.37
     };
 
-    // Obstacles array
-    const obstacles = [];
-    const obstacleSpeed = 5;
-    let score = 0;
+    // Fighter properties
+    function makeFighter(x, y, facing, img) {
+      return {
+        x,
+        y,
+        width: 110,
+        height: 110,
+        speed: 6,
+        vx: 0,
+        vy: 0,
+        color: 'blue',
+        img: img,
+        facing: facing, // 1 = right, -1 = left
+        isAttacking: false,
+        attackTimer: 0,
+        attackCooldown: 0,
+        health: 100,
+        maxHealth: 100,
+        attackRange: 70,
+        attackDamage: 17,
+        knockback: 24,
+      };
+    }
 
-    // Key controls
+    // Place fighters on the sumo ring
+    const player = makeFighter(
+      ring.x - 100, ring.y + ring.radius/2, 1, playerImg
+    );
+    player.color = 'deepskyblue';
+
+    const enemy = makeFighter(
+      ring.x + 100, ring.y + ring.radius/2, -1, enemyImg
+    );
+    enemy.color = 'orangered';
+    enemy.AI = true;
+    enemy.attackCooldown = 60;
+
+    // Controls
+    let left, right;
+    let attacking = false;
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowLeft') player.dx = -player.speed;
-      if (e.key === 'ArrowRight') player.dx = player.speed;
+      if (e.key === 'ArrowLeft') left = true;
+      if (e.key === 'ArrowRight') right = true;
+    });
+    document.addEventListener('keyup', (e) => {
+      if (e.key === 'ArrowLeft') left = false;
+      if (e.key === 'ArrowRight') right = false;
+    });
+    canvas.addEventListener('mousedown', (e) => {
+      if (e.button === 0) attacking = true;
+    });
+    canvas.addEventListener('mouseup', (e) => {
+      if (e.button === 0) attacking = false;
     });
 
-    document.addEventListener('keyup', () => {
-      player.dx = 0;
-    });
+    // Helper: Draw sumo ring (better graphics)
+    function drawRing() {
+      // Draw sand base
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(ring.x, ring.y, ring.radius, 0, Math.PI * 2);
+      ctx.fillStyle = "#ede1c2";
+      ctx.shadowColor = "#d2b48c";
+      ctx.shadowBlur = 70;
+      ctx.fill();
+      ctx.restore();
 
-    // Create obstacles
-    function createObstacle() {
-      const width = Math.random() * 100 + 20;
-      const x = Math.random() * (canvas.width - width);
-      obstacles.push({ x, y: 0, width, height: 20, color: 'red' });
+      // Draw ring border
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(ring.x, ring.y, ring.radius * 0.93, 0, Math.PI * 2);
+      ctx.lineWidth = 18;
+      ctx.strokeStyle = "#c0955a";
+      ctx.shadowColor = "#b48b48";
+      ctx.shadowBlur = 20;
+      ctx.stroke();
+      ctx.restore();
+
+      // Draw decorative lines (shikiri-sen)
+      ctx.save();
+      ctx.strokeStyle = "#e3d9b0";
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(ring.x - ring.radius*0.38, ring.y);
+      ctx.lineTo(ring.x + ring.radius*0.38, ring.y);
+      ctx.moveTo(ring.x, ring.y - ring.radius*0.18);
+      ctx.lineTo(ring.x, ring.y + ring.radius*0.18);
+      ctx.stroke();
+      ctx.restore();
     }
 
-    // Update game objects
+    // Helper: Draw fighter with health bar
+    function drawFighter(f) {
+      ctx.save();
+      // Shadow under fighter
+      ctx.globalAlpha = 0.23;
+      ctx.beginPath();
+      ctx.ellipse(f.x + f.width/2, f.y + f.height - 10, f.width/2.5, 14, 0, 0, Math.PI*2);
+      ctx.fillStyle = "#222";
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      // Fighter body (draw image if loaded, fallback to colored rect)
+      if (f.img && f.img.complete) {
+        ctx.save();
+        ctx.translate(f.x + f.width/2, f.y + f.height/2);
+        ctx.scale(f.facing, 1);
+        ctx.drawImage(f.img, -f.width/2, -f.height/2, f.width, f.height);
+        ctx.restore();
+      } else {
+        ctx.fillStyle = f.color;
+        ctx.fillRect(f.x, f.y, f.width, f.height);
+      }
+
+      // Attack effect
+      if (f.isAttacking && f.attackTimer > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.32 + Math.random()*0.12;
+        ctx.strokeStyle = "#ffd600";
+        ctx.lineWidth = 9;
+        ctx.beginPath();
+        let reachX = f.x + f.width/2 + f.facing * (f.width/2 + 22);
+        ctx.arc(reachX, f.y + f.height/2, 32+Math.random()*12, -0.5, 0.5);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Health bar
+      ctx.save();
+      let healthBarW = f.width;
+      let ratio = f.health / f.maxHealth;
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(f.x, f.y-14, healthBarW, 8);
+      ctx.fillStyle = f.AI ? "#ff542f" : "#05e0d2";
+      ctx.fillRect(f.x, f.y-14, Math.max(0, healthBarW*ratio), 8);
+      ctx.strokeStyle = "#333";
+      ctx.strokeRect(f.x, f.y-14, healthBarW, 8);
+      ctx.restore();
+    }
+
+    // Helper: Keep fighter inside ring
+    function keepInsideRing(f) {
+      let cx = f.x + f.width/2;
+      let cy = f.y + f.height/2 + 20;
+      let dx = cx - ring.x;
+      let dy = cy - ring.y;
+      let dist = Math.sqrt(dx*dx + dy*dy);
+      let bound = ring.radius - f.width/2;
+      if (dist > bound) {
+        let angle = Math.atan2(dy, dx);
+        cx = ring.x + Math.cos(angle) * bound;
+        cy = ring.y + Math.sin(angle) * bound;
+        f.x = cx - f.width/2;
+        f.y = cy - f.height/2 - 20;
+        // Knockback on out-of-bounds
+        f.vx *= -0.4; f.vy *= -0.4;
+      }
+    }
+
+    // Physics & attacks
+    function updateFighter(f, opponent, input = {}) {
+      // Movement
+      if (input.left) f.vx = -f.speed;
+      else if (input.right) f.vx = f.speed;
+      else f.vx *= 0.7;
+
+      f.x += f.vx;
+      f.y += f.vy;
+      f.vx *= 0.85;
+      f.vy *= 0.85;
+
+      // Facing
+      f.facing = (f.x < opponent.x) ? 1 : -1;
+
+      // Attacking
+      if (f.attackCooldown > 0) f.attackCooldown--;
+      if (input.attack && !f.isAttacking && f.attackCooldown <= 0) {
+        f.isAttacking = true;
+        f.attackTimer = 20;
+        f.attackCooldown = 60;
+      }
+      if (f.isAttacking) {
+        f.attackTimer--;
+        if (f.attackTimer <= 0) {
+          f.isAttacking = false;
+        }
+      }
+
+      // Collision (Attack hit)
+      if (f.isAttacking && f.attackTimer > 12 && f.attackTimer < 18) {
+        // Only hit if close and facing opponent
+        let fx = f.x + f.width/2 + f.facing*f.attackRange;
+        let fy = f.y + f.height/2;
+        let opx = opponent.x + opponent.width/2;
+        let opy = opponent.y + opponent.height/2;
+        let dist = Math.sqrt((fx-opx)**2 + (fy-opy)**2);
+        if (dist < f.width*0.75 && !opponent._justHit) {
+          opponent.health -= f.attackDamage;
+          opponent.vx += f.facing * f.knockback;
+          opponent.vy -= 6 + Math.random()*3;
+          opponent._justHit = 12; // Prevent multi-hit per swing
+        }
+      }
+      // Reduce just-hit status
+      if (f._justHit) f._justHit--;
+
+      // Gravity (subtle)
+      f.vy += 0.3;
+      // Keep inside ring
+      keepInsideRing(f);
+    }
+
+    // Enemy AI
+    function enemyAI() {
+      // Chase player if far, else back up a little
+      let dx = player.x - enemy.x;
+      let dist = Math.abs(dx);
+      let input = {left: false, right: false, attack: false};
+      if (dist > 70) input[dx > 0 ? 'right' : 'left'] = true;
+      else if (dist < 45) input[dx > 0 ? 'left' : 'right'] = true;
+
+      // Attack if in range and facing player
+      if (dist < enemy.attackRange + 18 && (enemy.facing === (enemy.x < player.x ? 1 : -1))) {
+        if (enemy.attackCooldown <= 0) input.attack = true;
+      }
+      return input;
+    }
+
+    // Game state
+    let gameOver = false;
+    let winner = null;
+
     function update() {
-      // Move player
-      player.x += player.dx;
-      if (player.x < 0) player.x = 0;
-      if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+      if (gameOver) return;
 
-      // Move obstacles
-      obstacles.forEach((obstacle, index) => {
-        obstacle.y += obstacleSpeed;
-        if (obstacle.y > canvas.height) {
-          obstacles.splice(index, 1);
-          score++;
-        }
+      // Player input
+      let input = {
+        left: !!left,
+        right: !!right,
+        attack: !!attacking
+      };
+      updateFighter(player, enemy, input);
 
-        // Collision detection
-        if (
-          player.x < obstacle.x + obstacle.width &&
-          player.x + player.width > obstacle.x &&
-          player.y < obstacle.y + obstacle.height &&
-          player.y + player.height > obstacle.y
-        ) {
-          alert(`Game Over! Your score: ${score}`);
-          document.location.reload();
-        }
-      });
+      // Enemy AI
+      updateFighter(enemy, player, enemyAI());
 
-      // Add new obstacles
-      if (Math.random() < 0.02) createObstacle();
+      // Win condition: health or out of ring
+      if (player.health <= 0) { gameOver = true; winner = 'Enemy'; }
+      if (enemy.health <= 0) { gameOver = true; winner = 'Player'; }
+
+      // Out of ring = instant loss
+      function isOutOfRing(f) {
+        let cx = f.x + f.width/2;
+        let cy = f.y + f.height/2 + 20;
+        let dx = cx - ring.x;
+        let dy = cy - ring.y;
+        return Math.sqrt(dx*dx + dy*dy) > ring.radius * 0.95;
+      }
+      if (isOutOfRing(player)) { gameOver = true; winner = 'Enemy'; }
+      if (isOutOfRing(enemy)) { gameOver = true; winner = 'Player'; }
     }
 
-    // Draw game objects
     function draw() {
+      // Draw ring background
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (ringImg && ringImg.complete)
+        ctx.drawImage(ringImg, ring.x-ring.radius-30, ring.y-ring.radius-50, ring.radius*2+60, ring.radius*2+70);
+      drawRing();
 
-      // Draw player
-      ctx.fillStyle = player.color;
-      ctx.fillRect(player.x, player.y, player.width, player.height);
+      // Fighters
+      drawFighter(player);
+      drawFighter(enemy);
 
-      // Draw obstacles
-      obstacles.forEach((obstacle) => {
-        ctx.fillStyle = obstacle.color;
-        ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
-      });
+      // UI: health and controls
+      ctx.save();
+      ctx.font = "28px Arial Black, Arial, sans-serif";
+      ctx.fillStyle = "rgba(0,0,0,0.7)";
+      ctx.fillRect(0, 0, 390, 44);
+      ctx.fillRect(canvas.width-390, 0, 390, 44);
+      ctx.fillStyle = "#05e0d2";
+      ctx.fillText("You", 23, 34);
+      ctx.fillStyle = "#ff542f";
+      ctx.fillText("Enemy", canvas.width-150, 34);
+      ctx.font = "19px Arial, sans-serif";
+      ctx.fillStyle = "#fff";
+      ctx.fillText("Arrows = Move | Left Click = Attack", 145, 32);
+      ctx.restore();
 
-      // Draw score
-      ctx.fillStyle = 'black';
-      ctx.font = '20px Arial';
-      ctx.fillText(`Score: ${score}`, 10, 30);
+      if (gameOver) {
+        ctx.save();
+        ctx.font = "bold 56px Arial Black, Arial, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#fff";
+        ctx.strokeStyle = "#222";
+        ctx.lineWidth = 7;
+        ctx.strokeText(`${winner} Wins!`, canvas.width/2, 120);
+        ctx.fillStyle = "#00d6ff";
+        ctx.fillText(`${winner} Wins!`, canvas.width/2, 120);
+        ctx.font = "32px Arial";
+        ctx.fillStyle = "#fff";
+        ctx.fillText("Refresh to play again", canvas.width/2, 180);
+        ctx.restore();
+      }
     }
 
-    // Game loop
     function gameLoop() {
       update();
       draw();
       requestAnimationFrame(gameLoop);
     }
+
+    // Responsive resize
+    window.addEventListener('resize', () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      ring.x = canvas.width/2;
+      ring.y = canvas.height/2 + 40;
+      ring.radius = Math.min(canvas.width, canvas.height) * 0.37;
+      // Fighters repositioned to ring
+      if (!gameOver) {
+        player.x = ring.x - 100;
+        player.y = ring.y + ring.radius/2;
+        enemy.x = ring.x + 100;
+        enemy.y = ring.y + ring.radius/2;
+      }
+    });
 
     gameLoop();
   </script>
