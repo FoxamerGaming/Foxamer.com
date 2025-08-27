@@ -4,8 +4,9 @@
   <meta charset="UTF-8">
   <title>Magical World VR Adventure</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- A-Frame for VR support -->
+  <!-- A-Frame + Extras for controls and effects -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/aframe-particle-system-component@1.0.0/dist/aframe-particle-system-component.min.js"></script>
   <style>
     body { margin: 0; overflow: hidden; background: #101020; }
     #ui-overlay {
@@ -36,6 +37,15 @@
       font-size: 22px;
       image-rendering: pixelated;
       box-shadow: 0 0 4px #5ee1ff;
+      transition: border 0.1s, box-shadow 0.1s;
+      opacity: 0.85;
+      cursor: pointer;
+      pointer-events: all;
+    }
+    .hotbar-slot.selected {
+      border: 2px solid #f9e041;
+      box-shadow: 0 0 10px #ffe66b;
+      opacity: 1;
     }
     #crafting {
       width: 300px;
@@ -60,20 +70,68 @@
       font-size: 16px;
       z-index: 3;
       box-shadow: 0 0 10px #f8e041;
-      max-width: 300px;
+      max-width: 340px;
       image-rendering: pixelated;
+    }
+    #controls-guide {
+      position: fixed;
+      top: 18px; left: 18px;
+      background: rgba(0,0,0,0.8);
+      color: #aefcfc;
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-family: monospace;
+      font-size: 15px;
+      z-index: 3;
+      box-shadow: 0 0 10px #4efcfc;
+      line-height: 1.7;
+      image-rendering: pixelated;
+    }
+    #health-bar {
+      position: fixed; top: 0; left: 0; width: 100vw; z-index: 4;
+      height: 24px;
+      background: rgba(0,0,0,0.25);
+    }
+    #health-bar-inner {
+      height: 100%;
+      background: linear-gradient(90deg, #ff6b6b, #ffe066);
+      border-bottom-right-radius: 15px;
+      border-top-right-radius: 15px;
+      transition: width 0.3s;
+      box-shadow: 0 0 8px #fa4;
+    }
+    #damage-flash {
+      position: fixed; inset: 0; pointer-events: none;
+      background: rgba(255,64,64,0.25);
+      z-index: 100;
+      opacity: 0;
+      transition: opacity 0.3s;
     }
   </style>
 </head>
 <body>
+  <!-- Health Bar -->
+  <div id="health-bar">
+    <div id="health-bar-inner" style="width:100%"></div>
+  </div>
+  <div id="damage-flash"></div>
+  <!-- Controls Guide -->
+  <div id="controls-guide">
+    <b>Controls</b><br>
+    Move: <b>WASD</b><br>
+    Look: <b>Mouse</b><br>
+    Attack: <b>Left click</b><br>
+    Switch Item: <b>1-5</b> or click slot<br>
+    Craft/Backpack: <b>Click UI</b><br>
+  </div>
   <!-- UI Overlay -->
   <div id="ui-overlay">
     <div id="hotbar">
-      <div class="hotbar-slot" title="Wooden Staff">🪄</div>
-      <div class="hotbar-slot" title="Apple">🍎</div>
-      <div class="hotbar-slot" title="Sword">🗡️</div>
-      <div class="hotbar-slot" title="Backpack">🎒</div>
-      <div class="hotbar-slot" title="Crafting">🛠️</div>
+      <div class="hotbar-slot selected" data-item="wand" title="Wooden Staff">🪄</div>
+      <div class="hotbar-slot" data-item="apple" title="Apple">🍎</div>
+      <div class="hotbar-slot" data-item="sword" title="Sword">🗡️</div>
+      <div class="hotbar-slot" data-item="backpack" title="Backpack">🎒</div>
+      <div class="hotbar-slot" data-item="craft" title="Crafting">🛠️</div>
     </div>
     <div id="crafting">
       <b>Crafting Bench</b><br>
@@ -89,52 +147,272 @@
   </div>
 
   <!-- VR Scene -->
-  <a-scene background="color: #7ec8e3">
-    <!-- Jungle ground -->
-    <a-plane position="0 0 0" rotation="-90 0 0" width="40" height="40" color="#3e8040" shadow="receive:true"></a-plane>
-    <!-- Trees -->
-    <a-cylinder position="-3 1 2" radius="0.35" height="2" color="#7b4428"></a-cylinder>
-    <a-sphere position="-3 2.5 2" radius="1.2" color="#2bde45"></a-sphere>
-    <a-cylinder position="2 1 -3" radius="0.35" height="2.2" color="#7b4428"></a-cylinder>
-    <a-sphere position="2 3 -3" radius="1.3" color="#24c862"></a-sphere>
-    <!-- Pixelated effect: blocky rocks & plants -->
-    <a-box position="1 0.5 1" width="0.8" height="0.5" depth="0.7" color="#c8b9a6"></a-box>
-    <a-box position="-2 0.3 -2" width="0.5" height="0.3" depth="0.5" color="#fff69b"></a-box>
-    <a-box position="3 0.2 3" width="0.3" height="0.2" depth="0.3" color="#a9ffa4"></a-box>
+  <a-scene background="color: #7ec8e3" shadow="type: pcfsoft">
+    <!-- Jungle ground with pixel-art texture -->
+    <a-plane position="0 0 0" rotation="-90 0 0" width="40" height="40"
+      src="https://cdn.pixabay.com/photo/2017/01/31/13/14/pixel-2029671_1280.png"
+      repeat="20 20" material="roughness:0.8;metalness:0.2;" shadow="receive:true"></a-plane>
+    <!-- Jungle Trees (pixel/vibrant) -->
+    <a-cylinder position="-3 1 2" radius="0.38" height="2" color="#7b4428" shadow></a-cylinder>
+    <a-sphere position="-3 2.5 2" radius="1.2" color="#2bde45" shadow></a-sphere>
+    <a-cylinder position="2 1 -3" radius="0.38" height="2.2" color="#7b4428" shadow></a-cylinder>
+    <a-sphere position="2 3 -3" radius="1.3" color="#24c862" shadow></a-sphere>
+    <!-- More trees for depth -->
+    <a-cylinder position="5 1.2 5" radius="0.35" height="2.5" color="#81552a" shadow></a-cylinder>
+    <a-sphere position="5 3.2 5" radius="1.4" color="#31ff70" shadow></a-sphere>
+    <a-cylinder position="-6 1 -6" radius="0.42" height="2.8" color="#785030" shadow></a-cylinder>
+    <a-sphere position="-6 3 -6" radius="1.4" color="#43e6a1" shadow></a-sphere>
+    <!-- Pixelated rocks & plants -->
+    <a-box position="1 0.5 1" width="0.8" height="0.5" depth="0.7" color="#c8b9a6" shadow></a-box>
+    <a-box position="-2 0.3 -2" width="0.5" height="0.3" depth="0.5" color="#fff69b" shadow></a-box>
+    <a-box position="3 0.2 3" width="0.3" height="0.2" depth="0.3" color="#a9ffa4" shadow></a-box>
+    <!-- Jungle ambient particles -->
+    <a-entity position="0 3 0" particle-system="preset: dust; color: #fff699, #b1fcfe; particleCount: 500; size: 1"></a-entity>
     <!-- Monsters (level 1-3) -->
-    <a-entity id="monster1" geometry="primitive: box" material="color: #ed3e3e" position="5 0.5 0"></a-entity>
-    <a-entity id="monster2" geometry="primitive: box" material="color: #f7c53b" position="-5 0.5 2"></a-entity>
-    <a-entity id="monster3" geometry="primitive: box" material="color: #3b8cf7" position="0 0.5 -6"></a-entity>
-    <!-- Player camera + controls -->
-    <a-entity camera look-controls wasd-controls position="0 1.6 8"></a-entity>
-    <!-- Magical region portals (expandable) -->
-    <a-ring position="10 0.1 0" rotation="-90 0 0" radius-inner="0.8" radius-outer="1.2" color="#ffb76b"></a-ring>
+    <a-entity class="monster" id="monster1"
+      geometry="primitive: box; width:1; height:1; depth:1"
+      material="color: #ed3e3e; metalness:0.5; roughness:0.2"
+      position="5 0.5 0"
+      health="3"
+      animation__idle="property: rotation; to: 0 360 0; loop: true; dur: 4000"
+      shadow
+    ></a-entity>
+    <a-entity class="monster" id="monster2"
+      geometry="primitive: box; width:1; height:1; depth:1"
+      material="color: #f7c53b; metalness:0.4; roughness:0.25"
+      position="-5 0.5 2"
+      health="2"
+      animation__idle="property: rotation; to: 0 360 0; loop: true; dur: 3500"
+      shadow
+    ></a-entity>
+    <a-entity class="monster" id="monster3"
+      geometry="primitive: box; width:1; height:1; depth:1"
+      material="color: #3b8cf7; metalness:0.6; roughness:0.22"
+      position="0 0.5 -6"
+      health="2"
+      animation__idle="property: rotation; to: 0 360 0; loop: true; dur: 3200"
+      shadow
+    ></a-entity>
+    <!-- Enemy attack particle effect -->
+    <a-entity id="enemy-attack-effect" particle-system="preset: snow; color: #ff4747; particleCount: 0"></a-entity>
+    <!-- Magical region portals -->
+    <a-ring position="10 0.1 0" rotation="-90 0 0" radius-inner="0.8" radius-outer="1.2" color="#ffb76b" shadow></a-ring>
     <a-entity text="value: Desert Portal; color: #fff; align: center" position="10 1 0"></a-entity>
-    <a-ring position="-10 0.1 0" rotation="-90 0 0" radius-inner="0.8" radius-outer="1.2" color="#6bb8ff"></a-ring>
+    <a-ring position="-10 0.1 0" rotation="-90 0 0" radius-inner="0.8" radius-outer="1.2" color="#6bb8ff" shadow></a-ring>
     <a-entity text="value: Frost Portal; color: #fff; align: center" position="-10 1 0"></a-entity>
     <!-- Empire Castle (end goal, far away) -->
-    <a-box position="0 2 20" width="10" height="4" depth="4" color="#d0c6f7"></a-box>
-    <a-cylinder position="3 4 20" radius="1" height="3" color="#6e7fff"></a-cylinder>
-    <a-cylinder position="-3 4 20" radius="1" height="3" color="#6e7fff"></a-cylinder>
+    <a-box position="0 2 20" width="10" height="4" depth="4" color="#d0c6f7" shadow></a-box>
+    <a-cylinder position="3 4 20" radius="1" height="3" color="#6e7fff" shadow></a-cylinder>
+    <a-cylinder position="-3 4 20" radius="1" height="3" color="#6e7fff" shadow></a-cylinder>
     <a-entity text="value: Empire Castle; color: #fff; align: center" position="0 6 20"></a-entity>
-    <!-- Vibrant light -->
-    <a-entity light="type: ambient; color: #fff; intensity: 0.5"></a-entity>
-    <a-entity light="type: directional; color: #ffe0aa; intensity: 1" position="0 10 0"></a-entity>
+    <!-- Lighting for depth -->
+    <a-entity light="type: ambient; color: #fff; intensity: 0.55"></a-entity>
+    <a-entity light="type: directional; color: #ffe0aa; intensity: 1.3" position="2 10 -2" shadow="cast:true"></a-entity>
+    <a-entity light="type: point; color: #4eafff; intensity: 0.4" position="0 3 0"></a-entity>
+    <!-- Player camera + controls -->
+    <a-entity id="player" camera look-controls wasd-controls position="0 1.6 8" user-height="1.6">
+      <!-- Held item (updated by JS) -->
+      <a-entity id="held-item" position="0.25 -0.25 -0.6"></a-entity>
+    </a-entity>
   </a-scene>
-  <!-- Game Logic (basic) -->
   <script>
-    // Simple quest progress
-    let monstersDefeated = 0;
-    document.querySelectorAll('[id^=monster]').forEach(monster => {
-      monster.addEventListener('click', () => {
-        monster.setAttribute('visible', 'false');
-        monstersDefeated++;
-        document.getElementById('quest').innerHTML = monstersDefeated < 2
-          ? `<b>Quest:</b> Defeat ${2 - monstersDefeated} more monsters!`
-          : `<b>Quest:</b> Find a magical portal to discover new spells!`;
+    // --- Player State ---
+    let playerHealth = 10, maxHealth = 10, monstersDefeated = 0;
+    let selectedHotbar = 0;
+    const hotbarItems = [
+      {type: "wand", emoji: "🪄"},
+      {type: "apple", emoji: "🍎"},
+      {type: "sword", emoji: "🗡️"},
+      {type: "backpack", emoji: "🎒"},
+      {type: "craft", emoji: "🛠️"}
+    ];
+    // --- UI Handling: Hotbar ---
+    const hotbarSlots = Array.from(document.querySelectorAll('.hotbar-slot'));
+    function updateHotbarUI() {
+      hotbarSlots.forEach((slot,i) => {
+        slot.classList.toggle('selected', i===selectedHotbar);
+      });
+    }
+    hotbarSlots.forEach((slot,i) => {
+      slot.onclick = e => {
+        selectedHotbar = i; updateHotbarUI();
+        updateHeldItem();
+      };
+    });
+    // Keyboard controls for hotbar
+    window.addEventListener('keydown', e=>{
+      if(e.key>='1' && e.key<='5') {
+        selectedHotbar = Number(e.key)-1; updateHotbarUI();
+        updateHeldItem();
+      }
+    });
+    // --- Held Item Display ---
+    function updateHeldItem() {
+      const hand = document.getElementById('held-item');
+      hand.innerHTML = '';
+      let ent;
+      switch(hotbarItems[selectedHotbar].type) {
+        case "wand":
+          ent = document.createElement('a-entity');
+          ent.setAttribute('geometry','primitive: cylinder; radius: 0.03; height: 0.35');
+          ent.setAttribute('material','color: #a07d4a; metalness:0.2; roughness:0.8;');
+          ent.setAttribute('position','0 0 0');
+          // Magic tip
+          const tip = document.createElement('a-sphere');
+          tip.setAttribute('radius','0.06');
+          tip.setAttribute('color','#6af2ff');
+          tip.setAttribute('position','0 0.17 0');
+          ent.appendChild(tip);
+          break;
+        case "apple":
+          ent = document.createElement('a-sphere');
+          ent.setAttribute('radius','0.08');
+          ent.setAttribute('color','#ff3333');
+          break;
+        case "sword":
+          ent = document.createElement('a-entity');
+          const blade = document.createElement('a-box');
+          blade.setAttribute('width','0.04');
+          blade.setAttribute('height','0.18');
+          blade.setAttribute('depth','0.01');
+          blade.setAttribute('color','#e6e6e6');
+          blade.setAttribute('position','0 0.10 0');
+          ent.appendChild(blade);
+          const hilt = document.createElement('a-box');
+          hilt.setAttribute('width','0.08');
+          hilt.setAttribute('height','0.02');
+          hilt.setAttribute('depth','0.03');
+          hilt.setAttribute('color','#d6a15f');
+          hilt.setAttribute('position','0 0.01 0');
+          ent.appendChild(hilt);
+          break;
+        case "backpack":
+          ent = document.createElement('a-box');
+          ent.setAttribute('width','0.13');
+          ent.setAttribute('height','0.15');
+          ent.setAttribute('depth','0.08');
+          ent.setAttribute('color','#8f6c3f');
+          break;
+        case "craft":
+          ent = document.createElement('a-box');
+          ent.setAttribute('width','0.14');
+          ent.setAttribute('height','0.08');
+          ent.setAttribute('depth','0.08');
+          ent.setAttribute('color','#c7b59c');
+          break;
+      }
+      if(ent) hand.appendChild(ent);
+    }
+    updateHeldItem();
+
+    // --- Health Bar ---
+    function setHealth(hp) {
+      playerHealth = Math.max(0, Math.min(maxHealth, hp));
+      document.getElementById('health-bar-inner').style.width = (100 * playerHealth / maxHealth) + '%';
+      if(playerHealth <= 0) {
+        document.getElementById('quest').innerHTML = `<b>You died!</b> <br>Refresh page to try again.`;
+      }
+    }
+    // --- Damage Flash ---
+    function flashDamage() {
+      const df=document.getElementById('damage-flash');
+      df.style.opacity=1;
+      setTimeout(()=>df.style.opacity=0,350);
+    }
+
+    // --- Monster logic ---
+    const monsters = Array.from(document.querySelectorAll('.monster'));
+    monsters.forEach(monster => {
+      monster.dataset.health = monster.getAttribute('health') || 2;
+      monster.dataset.alive = "true";
+      monster.dataset.cooldown = 0; // Attack cooldown
+      // Monster AI update loop
+      setInterval(()=>{
+        if(monster.dataset.alive==="false") return;
+        // Find player position
+        const player = document.getElementById('player');
+        const mpos = monster.object3D.position, ppos = player.object3D.position;
+        const dist = mpos.distanceTo(ppos);
+        if(dist < 2.3 && monster.dataset.aggro==="true" && monster.dataset.cooldown == "0" && playerHealth>0) {
+          // Attack!
+          setHealth(playerHealth-2);
+          flashDamage();
+          // Show attack effect
+          const eff = document.getElementById('enemy-attack-effect');
+          eff.setAttribute('position',`${ppos.x} ${ppos.y+1.3} ${ppos.z}`);
+          eff.setAttribute('particle-system','preset: dust; color: #ff4747; particleCount: 40; size: 2.5; duration: 0.4');
+          monster.dataset.cooldown = "1";
+          setTimeout(()=>monster.dataset.cooldown = "0", 1800);
+        }
+        // Chase if aggro
+        if(monster.dataset.aggro==="true" && dist < 15 && playerHealth>0) {
+          // Move toward player
+          const dx = ppos.x - mpos.x, dz = ppos.z - mpos.z;
+          const len = Math.sqrt(dx*dx+dz*dz);
+          if(len>0.1 && dist>1.1) {
+            mpos.x += 0.016*dx/len;
+            mpos.z += 0.016*dz/len;
+          }
+        }
+      }, 45);
+      // When clicked/attacked
+      monster.addEventListener('click', e=>{
+        if(monster.dataset.alive==="false" || playerHealth<=0) return;
+        // Only attack with sword or wand for now
+        const item = hotbarItems[selectedHotbar].type;
+        if(item!=="sword" && item!=="wand") return;
+        let dmg = (item==="sword"?2:1);
+        let hp = monster.dataset.health = Number(monster.dataset.health)-dmg;
+        monster.setAttribute('material','opacity',Math.max(0.3,0.7*hp/(monster.getAttribute('health')||2)));
+        // Aggro on hit
+        monster.dataset.aggro="true";
+        if(hp<=0) {
+          monster.dataset.alive="false";
+          monster.setAttribute('visible','false');
+          monstersDefeated++;
+          document.getElementById('quest').innerHTML = monstersDefeated < 2
+            ? `<b>Quest:</b> Defeat ${2 - monstersDefeated} more monsters!`
+            : `<b>Quest:</b> Find a magical portal to discover new spells!`;
+        }
       });
     });
-    // More scripting can be added here for crafting, backpack, portals, etc.
+
+    // --- Mouse attack control: simulates click on monsters in front ---
+    window.addEventListener('mousedown', e=>{
+      if(playerHealth<=0) return;
+      // Raycast forward to see if a monster is hit
+      const player = document.getElementById('player');
+      const cam = player.object3D;
+      const origin = cam.position.clone();
+      const direction = new THREE.Vector3(0,0,-1).applyQuaternion(cam.quaternion);
+      // Check all monsters
+      let hit = null, minDist = 2.2;
+      monsters.forEach(monster=>{
+        if(monster.dataset.alive==="false") return;
+        const mpos = monster.object3D.position.clone();
+        // Project monster position onto player view ray
+        const toM = mpos.clone().sub(origin);
+        const projected = toM.dot(direction);
+        if(projected>0 && projected<minDist) {
+          // Perpendicular distance to ray
+          const closest = origin.clone().add(direction.clone().multiplyScalar(projected));
+          const d = mpos.distanceTo(closest);
+          if(d<0.8) {
+            hit = monster;
+            minDist = projected;
+          }
+        }
+      });
+      if(hit) hit.emit('click');
+    });
+
+    // --- Initial quest and health ---
+    setHealth(playerHealth);
+
+    // --- Enhance scene on load: update held item, etc. ---
+    window.addEventListener('DOMContentLoaded',()=>{
+      updateHeldItem();
+    });
   </script>
 </body>
 </html>
