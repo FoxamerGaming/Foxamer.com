@@ -2,144 +2,286 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Shooting Game</title>
+  <title>Space Shooting Game</title>
   <style>
     body {
       margin: 0;
+      background: #000;
       overflow: hidden;
-      background-color: black;
     }
     canvas {
       display: block;
+      margin: 0 auto;
+      background: #010922;
+      border: 3px solid #fff;
+    }
+    #scoreboard {
+      color: #fff;
+      font-family: Arial, sans-serif;
+      font-size: 22px;
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,0.6);
+      padding: 10px 24px;
+      border-radius: 12px;
+      border: 2px solid #48f;
+    }
+    #gameover {
+      display: none;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      font-size: 32px;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.8);
+      padding: 48px 64px;
+      border-radius: 18px;
+      border: 3px solid #f44;
+      text-align: center;
+      z-index: 10;
+    }
+    #restart-btn {
+      margin-top: 18px;
+      font-size: 18px;
+      padding: 10px 26px;
+      border: none;
+      border-radius: 6px;
+      background: #3392ff;
+      color: #fff;
+      cursor: pointer;
+    }
+    #restart-btn:hover {
+      background: #2357a0;
     }
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
+  <div id="scoreboard">Score: 0 &nbsp;|&nbsp; Missed: 0 / 20</div>
+  <div id="gameover">
+    <div id="gameover-text"></div>
+    <button id="restart-btn">Restart</button>
+  </div>
+  <canvas id="gameCanvas" width="480" height="640"></canvas>
   <script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    // Images as base64
+    const spaceshipImg = new Image();
+    spaceshipImg.src =
+      "data:image/svg+xml;base64," +
+      btoa(`<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="24,4 34,44 24,36 14,44" fill="#3af" stroke="#fff" stroke-width="2"/>
+      <ellipse cx="24" cy="16" rx="6" ry="8" fill="#fff" opacity="0.3"/>
+      </svg>`);
 
-    // Load spaceship image for player
-    const playerImg = new Image();
-    playerImg.src = 'https://upload.wikimedia.org/wikipedia/commons/3/37/Spaceship_clip_art.svg'; // Example spaceship
+    const meteoriteImg = new Image();
+    meteoriteImg.src =
+      "data:image/svg+xml;base64," +
+      btoa(`<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="20" cy="20" rx="16" ry="15" fill="#c96" stroke="#fff" stroke-width="2"/>
+      <ellipse cx="14" cy="18" rx="3" ry="2" fill="#fff" opacity="0.2"/>
+      <ellipse cx="27" cy="25" rx="2" ry="1" fill="#fff" opacity="0.2"/>
+      </svg>`);
 
-    // Load meteorite image for enemies
-    const meteorImg = new Image();
-    meteorImg.src = 'https://upload.wikimedia.org/wikipedia/commons/thumb/7/74/Meteorite_icon.svg/1024px-Meteorite_icon.svg.png'; // Example meteorite
+    // Game variables
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const scoreboard = document.getElementById("scoreboard");
+    const gameoverDiv = document.getElementById("gameover");
+    const gameoverText = document.getElementById("gameover-text");
+    const restartBtn = document.getElementById("restart-btn");
+    const W = canvas.width;
+    const H = canvas.height;
 
-    // Player setup
+    // Spaceship
     const player = {
-      x: canvas.width / 2,
-      y: canvas.height - 50,
-      width: 40,
-      height: 40,
-      speed: 5
+      x: W/2 - 24,
+      y: H - 70,
+      w: 48,
+      h: 48,
+      speed: 6,
+      movingLeft: false,
+      movingRight: false
     };
 
-    // Bullets array
+    // Bullets
     const bullets = [];
-    const bulletSpeed = 7;
+    const BULLET_SPEED = 10;
 
-    // Enemy setup
-    const enemies = [];
-    const enemySpeed = 2;
+    // Meteorites
+    const meteorites = [];
+    let meteoriteTimer = 0;
+    const METEORITE_INTERVAL = 40; // frames
+    const METEORITE_SPEED = 3;
+
+    // Score and missed
+    let score = 0;
+    let missed = 0;
+    let gameOver = false;
 
     // Controls
-    let keys = {};
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "ArrowLeft" || e.code === "KeyA") player.movingLeft = true;
+      if (e.code === "ArrowRight" || e.code === "KeyD") player.movingRight = true;
+      if ((e.code === "Space" || e.code === "ArrowUp") && !gameOver) shoot();
+    });
+    document.addEventListener("keyup", (e) => {
+      if (e.code === "ArrowLeft" || e.code === "KeyA") player.movingLeft = false;
+      if (e.code === "ArrowRight" || e.code === "KeyD") player.movingRight = false;
+    });
 
-    // Event listeners
-    window.addEventListener('keydown', (e) => keys[e.key] = true);
-    window.addEventListener('keyup', (e) => keys[e.key] = false);
-    window.addEventListener('click', shootBullet);
+    // Touch controls for mobile
+    canvas.addEventListener("touchstart", handleTouch, false);
+    canvas.addEventListener("touchmove", handleTouch, false);
+    canvas.addEventListener("touchend", () => {
+      player.movingLeft = false;
+      player.movingRight = false;
+    }, false);
 
-    function shootBullet() {
-      bullets.push({ x: player.x + player.width / 2 - 2.5, y: player.y, width: 5, height: 10, color: 'red' });
+    function handleTouch(e) {
+      const x = e.touches[0].clientX - canvas.getBoundingClientRect().left;
+      if (x < player.x) {
+        player.movingLeft = true;
+        player.movingRight = false;
+      } else if (x > player.x + player.w) {
+        player.movingRight = true;
+        player.movingLeft = false;
+      }
+      // Fire on tap
+      if (e.type === "touchstart") shoot();
+      e.preventDefault();
     }
 
-    function spawnEnemy() {
-      const size = Math.random() * 30 + 30;
-      enemies.push({ x: Math.random() * (canvas.width - size), y: -size, width: size, height: size });
+    function shoot() {
+      bullets.push({
+        x: player.x + player.w / 2 - 3,
+        y: player.y,
+        w: 6,
+        h: 18
+      });
+    }
+
+    function spawnMeteorite() {
+      const mx = Math.random() * (W - 40);
+      meteorites.push({
+        x: mx,
+        y: -40,
+        w: 40,
+        h: 40,
+        speed: METEORITE_SPEED + Math.random()*1.6
+      });
     }
 
     function update() {
+      if (gameOver) return;
+
       // Move player
-      if (keys['ArrowLeft'] && player.x > 0) player.x -= player.speed;
-      if (keys['ArrowRight'] && player.x + player.width < canvas.width) player.x += player.speed;
+      if (player.movingLeft) player.x -= player.speed;
+      if (player.movingRight) player.x += player.speed;
+      if (player.x < 0) player.x = 0;
+      if (player.x > W - player.w) player.x = W - player.w;
 
       // Move bullets
       for (let i = bullets.length - 1; i >= 0; i--) {
-        bullets[i].y -= bulletSpeed;
-        if (bullets[i].y + bullets[i].height < 0) bullets.splice(i, 1);
+        bullets[i].y -= BULLET_SPEED;
+        if (bullets[i].y < -bullets[i].h) bullets.splice(i, 1);
       }
 
-      // Move enemies
-      for (let i = enemies.length - 1; i >= 0; i--) {
-        enemies[i].y += enemySpeed;
-        if (enemies[i].y > canvas.height) enemies.splice(i, 1);
+      // Spawn meteorites
+      meteoriteTimer++;
+      if (meteoriteTimer >= METEORITE_INTERVAL) {
+        spawnMeteorite();
+        meteoriteTimer = 0;
+      }
+
+      // Move meteorites
+      for (let i = meteorites.length - 1; i >= 0; i--) {
+        meteorites[i].y += meteorites[i].speed;
+        // Collision with player missed
+        if (meteorites[i].y > H) {
+          meteorites.splice(i, 1);
+          missed++;
+          if (missed >= 20) endGame();
+        }
       }
 
       // Collision detection
-      for (let b = bullets.length - 1; b >= 0; b--) {
-        for (let e = enemies.length - 1; e >= 0; e--) {
-          const bullet = bullets[b];
-          const enemy = enemies[e];
-          if (
-            bullet.x < enemy.x + enemy.width &&
-            bullet.x + bullet.width > enemy.x &&
-            bullet.y < enemy.y + enemy.height &&
-            bullet.y + bullet.height > enemy.y
-          ) {
-            bullets.splice(b, 1);
-            enemies.splice(e, 1);
+      for (let i = meteorites.length - 1; i >= 0; i--) {
+        const m = meteorites[i];
+        for (let j = bullets.length - 1; j >= 0; j--) {
+          const b = bullets[j];
+          if (b.x < m.x + m.w && b.x + b.w > m.x && b.y < m.y + m.h && b.y + b.h > m.y) {
+            meteorites.splice(i, 1);
+            bullets.splice(j, 1);
+            score++;
             break;
           }
         }
       }
+
+      // Update scoreboard
+      scoreboard.innerHTML = `Score: ${score} &nbsp;|&nbsp; Missed: ${missed} / 20`;
     }
 
     function draw() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, W, H);
 
-      // Draw player (spaceship)
-      if (playerImg.complete) {
-        ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
-      } else {
-        ctx.fillStyle = 'white';
-        ctx.fillRect(player.x, player.y, player.width, player.height);
-      }
+      // Draw player
+      ctx.drawImage(spaceshipImg, player.x, player.y, player.w, player.h);
 
       // Draw bullets
-      bullets.forEach(bullet => {
-        ctx.fillStyle = bullet.color;
-        ctx.fillRect(bullet.x, bullet.y, bullet.width, bullet.height);
-      });
+      ctx.save();
+      ctx.fillStyle = "#81f";
+      for (const b of bullets)
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+      ctx.restore();
 
-      // Draw enemies (meteorites)
-      enemies.forEach(enemy => {
-        if (meteorImg.complete) {
-          ctx.drawImage(meteorImg, enemy.x, enemy.y, enemy.width, enemy.height);
-        } else {
-          ctx.fillStyle = 'green';
-          ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
-        }
-      });
+      // Draw meteorites
+      for (const m of meteorites)
+        ctx.drawImage(meteoriteImg, m.x, m.y, m.w, m.h);
+
+      // Draw border
+      ctx.save();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(0, 0, W, H);
+      ctx.restore();
     }
+
+    function endGame() {
+      gameOver = true;
+      gameoverDiv.style.display = "block";
+      gameoverText.innerHTML = `Game Over!<br>Your Score: <b>${score}</b><br><br>Meteorites missed: <b>${missed}</b>`;
+    }
+
+    function restartGame() {
+      score = 0;
+      missed = 0;
+      gameOver = false;
+      meteorites.length = 0;
+      bullets.length = 0;
+      player.x = W/2 - 24;
+      meteoriteTimer = 0;
+      gameoverDiv.style.display = "none";
+      scoreboard.innerHTML = `Score: 0 &nbsp;|&nbsp; Missed: 0 / 20`;
+      requestAnimationFrame(gameLoop);
+    }
+
+    restartBtn.onclick = restartGame;
 
     function gameLoop() {
       update();
       draw();
-      requestAnimationFrame(gameLoop);
+      if (!gameOver) requestAnimationFrame(gameLoop);
     }
 
-    // Spawn enemies every 2 seconds
-    setInterval(spawnEnemy, 2000);
+    spaceshipImg.onload = function() {
+      // Wait for image to load before starting game
+      gameLoop();
+    };
 
-    // Start the game loop
-    gameLoop();
   </script>
 </body>
 </html>
