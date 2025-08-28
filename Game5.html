@@ -2,368 +2,628 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Magical World VR Adventure (Ultra Low Graphics)</title>
+  <title>VR Magic Adventure - Forest Sandbox Start</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- A-Frame (core only, no extras) -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
-    body { margin: 0; background: #111; color: #fff; }
-    #aframe-warning {
-      position: fixed; top: 40%; left: 0; right: 0;
-      text-align: center; z-index: 10; display: none;
-      font-family: monospace; font-size: 1.2em;
-      background: #222; color: #ffe066; padding: 24px 0;
-      border-radius: 16px;
-      box-shadow: 0 0 16px #ffe066;
-      margin: 0 12vw;
+    body, html {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #202834;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #f5f5fa;
+    }
+    #game-canvas {
+      width: 100vw;
+      height: 100vh;
+      background: radial-gradient(ellipse at center, #3a5c3a 0%, #1b2b1b 100%);
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+      z-index: 1;
+      cursor: crosshair;
     }
     #ui-overlay {
-      position: fixed;
-      left: 0; right: 0; bottom: 0;
+      position: absolute;
+      width: 100vw;
+      height: 100vh;
+      top: 0; left: 0;
       z-index: 2;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
       pointer-events: none;
     }
     #hotbar {
+      position: absolute;
+      left: 50%;
+      bottom: 3%;
+      transform: translateX(-50%);
       display: flex;
-      gap: 7px;
-      background: rgba(30,30,40,0.7);
-      border-radius: 7px;
-      padding: 4px 8px;
-      margin-bottom: 6px;
-      box-shadow: 0 0 4px #a2e8ff;
+      gap: 12px;
+      background: rgba(20,20,30,0.7);
+      padding: 12px 24px;
+      border-radius: 18px;
+      box-shadow: 0 4px 18px #000a;
+      pointer-events: auto;
     }
     .hotbar-slot {
-      width: 29px; height: 29px;
-      background: #222;
-      border: 2px solid #73f5b4;
-      border-radius: 4px;
-      display: flex; align-items: center; justify-content: center;
-      color: #caf0fa; font-family: monospace;
-      font-size: 16px;
-      image-rendering: pixelated;
-      box-shadow: 0 0 2px #5ee1ff;
-      transition: border 0.1s, box-shadow 0.1s;
-      opacity: 0.80;
-      cursor: pointer;
-      pointer-events: all;
+      width: 48px;
+      height: 48px;
+      background: rgba(60,70,90,0.85);
+      border-radius: 10px;
+      border: 2px solid #6fffb1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border 0.2s;
     }
-    .hotbar-slot.selected {
-      border: 2px solid #f9e041;
-      box-shadow: 0 0 4px #ffe66b;
-      opacity: 1;
+    .hotbar-slot.active {
+      border: 2.5px solid #fff6a0;
+      box-shadow: 0 0 10px #fff6a0aa;
     }
-    #quest {
-      position: fixed;
-      top: 10px; right: 10px;
-      background: rgba(30,30,40,0.85);
-      color: #fffcd4;
-      border-radius: 7px;
-      padding: 8px 12px;
-      font-family: monospace;
-      font-size: 12px;
+    .hotbar-slot img {
+      width: 36px;
+      height: 36px;
+      opacity: 0.95;
+    }
+    #xp-bar-container {
+      position: absolute;
+      left: 50%;
+      bottom: 10%;
+      transform: translateX(-50%);
+      width: 340px;
+      height: 16px;
+      background: #303a35;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px #000a;
       z-index: 3;
-      box-shadow: 0 0 4px #f8e041;
-      max-width: 260px;
-      image-rendering: pixelated;
     }
-    #controls-guide {
-      position: fixed;
-      top: 10px; left: 10px;
-      background: rgba(0,0,0,0.7);
-      color: #aefcfc;
-      border-radius: 7px;
-      padding: 7px 10px;
-      font-family: monospace;
-      font-size: 11px;
-      z-index: 3;
-      box-shadow: 0 0 4px #4efcfc;
-      line-height: 1.5;
-      image-rendering: pixelated;
-    }
-    #health-bar {
-      position: fixed; top: 0; left: 0; width: 100vw; z-index: 4;
-      height: 14px;
-      background: rgba(0,0,0,0.18);
-    }
-    #health-bar-inner {
+    #xp-bar {
       height: 100%;
-      background: linear-gradient(90deg, #ff6b6b, #ffe066);
-      border-bottom-right-radius: 9px;
-      border-top-right-radius: 9px;
-      transition: width 0.3s;
-      box-shadow: 0 0 5px #fa4;
+      background: linear-gradient(90deg, #ffe066 20%, #6fffb1 100%);
+      border-radius: 8px;
+      transition: width 0.4s;
     }
-    #damage-flash {
-      position: fixed; inset: 0; pointer-events: none;
-      background: rgba(255,64,64,0.19);
-      z-index: 100;
-      opacity: 0;
-      transition: opacity 0.3s;
+    #dialogue-box {
+      position: absolute;
+      left: 50%;
+      top: 65%;
+      transform: translate(-50%, -50%);
+      background: rgba(30, 30, 50, 0.92);
+      border-radius: 18px;
+      box-shadow: 0 2px 18px #0007;
+      padding: 28px 36px 24px 36px;
+      min-width: 320px;
+      max-width: 480px;
+      font-size: 1.1rem;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      z-index: 5;
+      text-align: center;
+    }
+    #dialogue-box button {
+      margin-top: 18px;
+      padding: 8px 16px;
+      background: #6fffb1;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      color: #1b2b1b;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: background 0.2s;
+    }
+    #dialogue-box button:hover {
+      background: #ffe066;
+    }
+    #player-stats {
+      position: absolute;
+      top: 3%;
+      left: 2.5%;
+      background: rgba(20,20,30,0.8);
+      border-radius: 10px;
+      padding: 14px 20px 10px 16px;
+      font-size: 1.05rem;
+      box-shadow: 0 2px 10px #0008;
+      z-index: 5;
+      pointer-events: auto;
+    }
+    #enemies-info {
+      position: absolute;
+      top: 3%;
+      right: 3.5%;
+      background: rgba(30,40,60,0.7);
+      border-radius: 10px;
+      padding: 10px 18px 8px 16px;
+      font-size: 1rem;
+      box-shadow: 0 2px 10px #0007;
+      z-index: 4;
+    }
+    #sandbox-controls {
+      position: absolute;
+      right: 24px;
+      bottom: 17%;
+      background: rgba(60,70,90,0.8);
+      border-radius: 14px;
+      box-shadow: 0 2px 8px #0007;
+      padding: 10px 18px;
+      font-size: 1rem;
+      z-index: 10;
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+    }
+    #sandbox-controls label {
+      font-size: 0.96rem;
+    }
+    #sandbox-controls select, #sandbox-controls button {
+      margin-top: 5px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1.5px solid #6fffb1;
+      background: #222;
+      color: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    #sandbox-controls button:hover {
+      background: #6fffb1;
+      color: #1b2b1b;
     }
   </style>
 </head>
 <body>
-  <div id="aframe-warning">
-    <b>Oh no! Your browser/device can't load the 3D game scene.</b><br>
-    <br>
-    - Make sure you're using the latest version of Microsoft Edge<br>
-    - Enable hardware acceleration in browser settings<br>
-    - Try disabling browser extensions<br>
-    - Or try Chrome or Firefox for best results<br>
-    <br>
-    <small>If this message persists, your device may not support WebGL or A-Frame VR scenes.</small>
-  </div>
-  <div id="health-bar">
-    <div id="health-bar-inner" style="width:100%"></div>
-  </div>
-  <div id="damage-flash"></div>
-  <div id="controls-guide">
-    <b>Controls</b><br>
-    Move: <b>WASD</b> | Look: <b>Mouse</b><br>
-    Attack: <b>Left click</b><br>
-    Switch: <b>1-5</b> or slot<br>
-  </div>
+  <canvas id="game-canvas"></canvas>
   <div id="ui-overlay">
     <div id="hotbar">
-      <div class="hotbar-slot selected" data-item="wand" title="Wooden Staff">🪄</div>
-      <div class="hotbar-slot" data-item="apple" title="Apple">🍎</div>
-      <div class="hotbar-slot" data-item="sword" title="Sword">🗡️</div>
-      <div class="hotbar-slot" data-item="backpack" title="Backpack">🎒</div>
-      <div class="hotbar-slot" data-item="craft" title="Crafting">🛠️</div>
+      <div class="hotbar-slot active" id="slot-0"><img src="https://cdn-icons-png.flaticon.com/512/535/535137.png" title="Magic Bolt" /></div>
+      <div class="hotbar-slot" id="slot-1"><img src="https://cdn-icons-png.flaticon.com/512/535/535234.png" title="Shield" /></div>
+      <div class="hotbar-slot" id="slot-2"><img src="https://cdn-icons-png.flaticon.com/512/535/535239.png" title="Heal" /></div>
+      <div class="hotbar-slot" id="slot-3"><img src="https://cdn-icons-png.flaticon.com/512/535/535127.png" title="Fireball" /></div>
+    </div>
+    <div id="xp-bar-container">
+      <div id="xp-bar" style="width: 15%"></div>
+    </div>
+    <div id="dialogue-box">
+      <div id="dialogue-npc" style="font-weight: bold; margin-bottom: 12px;"></div>
+      <div id="dialogue-text"></div>
+      <button onclick="closeDialogue()">Close</button>
+    </div>
+    <div id="player-stats">
+      <div>Level: <span id="stat-level">1</span></div>
+      <div>XP: <span id="stat-xp">0</span> / <span id="stat-xp-next">100</span></div>
+      <div>Strength: <span id="stat-str">5</span></div>
+      <div>Magic: <span id="stat-mag">5</span></div>
+      <div>Agility: <span id="stat-agi">5</span></div>
+    </div>
+    <div id="enemies-info">
+      <b>Nearby Enemies:</b>
+      <div id="enemies-list"></div>
+    </div>
+    <div id="sandbox-controls">
+      <label><b>Sandbox Tools</b></label>
+      <select id="sandbox-element">
+        <option value="tree">Tree</option>
+        <option value="rock">Rock</option>
+        <option value="pond">Pond</option>
+        <option value="flower">Flower</option>
+        <option value="bush">Bush</option>
+        <option value="mushroom">Mushroom</option>
+      </select>
+      <button onclick="setSandboxMode('place')">Place</button>
+      <button onclick="setSandboxMode('remove')">Remove</button>
+      <div style="font-size:0.82rem;color:#6fffb1;">Click anywhere to place/remove.</div>
     </div>
   </div>
-  <div id="quest">
-    <b>Quest:</b> Survive and defeat 2 monsters.<br>
-    <b>Tip:</b> Explore to learn spells!
-  </div>
-  <a-scene id="vrscene" embedded>
-    <!-- Simple, ultra-low-poly jungle floor -->
-    <a-plane position="0 0 0" rotation="-90 0 0" width="8" height="8" color="#235c2f"></a-plane>
-    <!-- Minimal trees -->
-    <a-cylinder position="-1 0.35 1" radius="0.09" height="0.6" color="#644521"></a-cylinder>
-    <a-sphere position="-1 0.65 1" radius="0.18" color="#2ab050"></a-sphere>
-    <a-cylinder position="1.2 0.35 -1.2" radius="0.09" height="0.6" color="#644521"></a-cylinder>
-    <a-sphere position="1.2 0.65 -1.2" radius="0.18" color="#2ab050"></a-sphere>
-    <!-- Rocks -->
-    <a-box position="0.5 0.06 0.5" width="0.09" height="0.05" depth="0.08" color="#c8b9a6"></a-box>
-    <!-- Monsters -->
-    <a-entity class="monster" id="monster1"
-      geometry="primitive: box; width:0.22; height:0.22; depth:0.22"
-      material="color: #e44444; metalness:0.1; roughness:0.5"
-      position="0.8 0.11 0.5"
-      health="2"
-    ></a-entity>
-    <a-entity class="monster" id="monster2"
-      geometry="primitive: box; width:0.22; height:0.22; depth:0.22"
-      material="color: #ffe066; metalness:0.1; roughness:0.5"
-      position="-0.8 0.11 0.7"
-      health="2"
-    ></a-entity>
-    <!-- Portal and castle (minimal) -->
-    <a-ring position="2 0.04 0" rotation="-90 0 0" radius-inner="0.12" radius-outer="0.19" color="#ffb76b"></a-ring>
-    <a-entity text="value: Portal; color: #fff; align: center" position="2 0.24 0" scale="0.33 0.33 0.33"></a-entity>
-    <a-box position="0 0.37 2.5" width="0.58" height="0.32" depth="0.21" color="#d0c6f7"></a-box>
-    <a-entity text="value: Castle; color: #fff; align: center" position="0 0.7 2.5" scale="0.25 0.25 0.25"></a-entity>
-    <!-- Low intensity lighting -->
-    <a-entity light="type: ambient; color: #fff; intensity: 0.38"></a-entity>
-    <a-entity light="type: directional; color: #ffe0aa; intensity: 0.33" position="0.5 1.5 -0.5"></a-entity>
-    <!-- Player camera + controls -->
-    <a-entity id="player" camera look-controls wasd-controls position="0 0.35 1.8">
-      <a-entity id="held-item" position="0.06 -0.06 -0.13"></a-entity>
-    </a-entity>
-  </a-scene>
   <script>
-    // Check if A-Frame loaded and WebGL is available
-    function isWebGLAvailable() {
-      try {
-        var canvas = document.createElement('canvas');
-        return !!window.WebGLRenderingContext && (
-          canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
-      } catch (e) { return false; }
+    // --- Game Data Structures ---
+    const player = {
+      level: 1,
+      xp: 0,
+      xpToNext: 100,
+      strength: 5,
+      magic: 5,
+      agility: 5,
+      abilities: [
+        { name: "Magic Bolt", icon: "https://cdn-icons-png.flaticon.com/512/535/535137.png" },
+        { name: "Shield", icon: "https://cdn-icons-png.flaticon.com/512/535/535234.png" },
+        { name: "Heal", icon: "https://cdn-icons-png.flaticon.com/512/535/535239.png" },
+        { name: "Fireball", icon: "https://cdn-icons-png.flaticon.com/512/535/535127.png" }
+      ]
+    };
+    let selectedAbility = 0;
+
+    function updateStatsDisplay() {
+      document.getElementById('stat-level').textContent = player.level;
+      document.getElementById('stat-xp').textContent = player.xp;
+      document.getElementById('stat-xp-next').textContent = player.xpToNext;
+      document.getElementById('stat-str').textContent = player.strength;
+      document.getElementById('stat-mag').textContent = player.magic;
+      document.getElementById('stat-agi').textContent = player.agility;
+      document.getElementById('xp-bar').style.width = Math.min((player.xp / player.xpToNext) * 100, 100) + "%";
     }
-    window.onload = function() {
-      let aframeLoaded = typeof AFRAME !== "undefined";
-      let webglOK = isWebGLAvailable();
-      if (!aframeLoaded || !webglOK) {
-        document.getElementById('vrscene').style.display = 'none';
-        document.getElementById('aframe-warning').style.display = 'block';
+
+    // Level up logic
+    function gainXP(amount) {
+      player.xp += amount;
+      if (player.xp >= player.xpToNext) {
+        player.xp -= player.xpToNext;
+        player.level += 1;
+        player.xpToNext = Math.floor(player.xpToNext * 1.5);
+        player.strength += 1;
+        player.magic += 1;
+        player.agility += 1;
+        showDialogue("System", "Level up! You are now level " + player.level + ". Stats increased.");
+      }
+      updateStatsDisplay();
+    }
+
+    // --- Enemies ---
+    class Enemy {
+      constructor(name, x, y) {
+        this.name = name;
+        this.level = 1;
+        this.hp = 22;
+        this.maxHp = 22;
+        this.x = x; this.y = y;
+        this.alive = true;
+      }
+      takeDamage(dmg) {
+        this.hp -= dmg;
+        if (this.hp <= 0) {
+          this.hp = 0;
+          this.alive = false;
+          gainXP(25);
+        }
       }
     }
-    // --- Player State ---
-    let playerHealth = 4, maxHealth = 4, monstersDefeated = 0;
-    let selectedHotbar = 0;
-    const hotbarItems = [
-      {type: "wand", emoji: "🪄"},
-      {type: "apple", emoji: "🍎"},
-      {type: "sword", emoji: "🗡️"},
-      {type: "backpack", emoji: "🎒"},
-      {type: "craft", emoji: "🛠️"}
+    // Start with some enemies in the forest
+    let enemies = [
+      new Enemy("Forest Sprite", 180, 400),
+      new Enemy("Tiny Goblin", 350, 250),
+      new Enemy("Wisp", 540, 320)
     ];
-    // --- UI Handling: Hotbar ---
-    const hotbarSlots = Array.from(document.querySelectorAll('.hotbar-slot'));
-    function updateHotbarUI() {
-      hotbarSlots.forEach((slot,i) => slot.classList.toggle('selected', i===selectedHotbar));
-    }
-    hotbarSlots.forEach((slot,i) => {
-      slot.onclick = e => {
-        selectedHotbar = i; updateHotbarUI();
-        updateHeldItem();
-      };
-    });
-    window.addEventListener('keydown', e=>{
-      if(e.key>='1' && e.key<='5') {
-        selectedHotbar = Number(e.key)-1; updateHotbarUI();
-        updateHeldItem();
-      }
-    });
-    // --- Held Item Display ---
-    function updateHeldItem() {
-      const hand = document.getElementById('held-item');
-      hand.innerHTML = '';
-      let ent;
-      switch(hotbarItems[selectedHotbar].type) {
-        case "wand":
-          ent = document.createElement('a-entity');
-          ent.setAttribute('geometry','primitive: cylinder; radius: 0.005; height: 0.06');
-          ent.setAttribute('material','color: #a07d4a; metalness:0.1; roughness:0.7;');
-          ent.setAttribute('position','0 0 0');
-          const tip = document.createElement('a-sphere');
-          tip.setAttribute('radius','0.012');
-          tip.setAttribute('color','#6af2ff');
-          tip.setAttribute('position','0 0.03 0');
-          ent.appendChild(tip);
-          break;
-        case "apple":
-          ent = document.createElement('a-sphere');
-          ent.setAttribute('radius','0.012');
-          ent.setAttribute('color','#ff3333');
-          break;
-        case "sword":
-          ent = document.createElement('a-entity');
-          const blade = document.createElement('a-box');
-          blade.setAttribute('width','0.008');
-          blade.setAttribute('height','0.032');
-          blade.setAttribute('depth','0.003');
-          blade.setAttribute('color','#e6e6e6');
-          blade.setAttribute('position','0 0.016 0');
-          ent.appendChild(blade);
-          const hilt = document.createElement('a-box');
-          hilt.setAttribute('width','0.012');
-          hilt.setAttribute('height','0.004');
-          hilt.setAttribute('depth','0.004');
-          hilt.setAttribute('color','#d6a15f');
-          hilt.setAttribute('position','0 0.004 0');
-          ent.appendChild(hilt);
-          break;
-        case "backpack":
-          ent = document.createElement('a-box');
-          ent.setAttribute('width','0.018');
-          ent.setAttribute('height','0.022');
-          ent.setAttribute('depth','0.012');
-          ent.setAttribute('color','#8f6c3f');
-          break;
-        case "craft":
-          ent = document.createElement('a-box');
-          ent.setAttribute('width','0.022');
-          ent.setAttribute('height','0.012');
-          ent.setAttribute('depth','0.012');
-          ent.setAttribute('color','#c7b59c');
-          break;
-      }
-      if(ent) hand.appendChild(ent);
-    }
-    updateHeldItem();
 
-    // --- Health Bar ---
-    function setHealth(hp) {
-      playerHealth = Math.max(0, Math.min(maxHealth, hp));
-      document.getElementById('health-bar-inner').style.width = (100 * playerHealth / maxHealth) + '%';
-      if(playerHealth <= 0) {
-        document.getElementById('quest').innerHTML = `<b>You died!</b> <br>Refresh page to try again.`;
+    // --- NPCs ---
+    const npcs = [
+      {
+        name: "Elder Willow",
+        x: 320, y: 150,
+        questText: "Welcome, young mage! The forest is restless. Defeat 1 Forest Sprite and return to me."
+      },
+      {
+        name: "Herbalist Fyn",
+        x: 600, y: 340,
+        questText: "Collect 1 Wisp Essence for my potions, please."
       }
-    }
-    // --- Damage Flash ---
-    function flashDamage() {
-      const df=document.getElementById('damage-flash');
-      df.style.opacity=1;
-      setTimeout(()=>df.style.opacity=0,180);
+    ];
+
+    function updateEnemiesList() {
+      document.getElementById('enemies-list').innerHTML = enemies.map(
+        e => e.alive ? `${e.name} (Lvl ${e.level}) - ${e.hp}/${e.maxHp}HP` : `<span style="color:#888">${e.name} (defeated)</span>`
+      ).join('<br>');
     }
 
-    // --- Monster logic ---
-    const monsters = Array.from(document.querySelectorAll('.monster'));
-    monsters.forEach(monster => {
-      monster.dataset.health = monster.getAttribute('health') || 2;
-      monster.dataset.alive = "true";
-      monster.dataset.cooldown = 0; // Attack cooldown
-      setInterval(()=>{
-        if(monster.dataset.alive==="false") return;
-        const player = document.getElementById('player');
-        const mpos = monster.object3D.position, ppos = player.object3D.position;
-        const dist = mpos.distanceTo(ppos);
-        if(dist < 0.36 && monster.dataset.aggro==="true" && monster.dataset.cooldown == "0" && playerHealth>0) {
-          setHealth(playerHealth-1);
-          flashDamage();
-          monster.dataset.cooldown = "1";
-          setTimeout(()=>monster.dataset.cooldown = "0", 800);
-        }
-        if(monster.dataset.aggro==="true" && dist < 4 && playerHealth>0) {
-          const dx = ppos.x - mpos.x, dz = ppos.z - mpos.z;
-          const len = Math.sqrt(dx*dx+dz*dz);
-          if(len>0.03 && dist>0.19) {
-            mpos.x += 0.005*dx/len;
-            mpos.z += 0.005*dz/len;
-          }
-        }
-      }, 70);
-      monster.addEventListener('click', e=>{
-        if(monster.dataset.alive==="false" || playerHealth<=0) return;
-        const item = hotbarItems[selectedHotbar].type;
-        if(item!=="sword" && item!=="wand") return;
-        let dmg = (item==="sword"?2:1);
-        let hp = monster.dataset.health = Number(monster.dataset.health)-dmg;
-        monster.setAttribute('material','opacity',Math.max(0.3,0.7*hp/(monster.getAttribute('health')||2)));
-        monster.dataset.aggro="true";
-        if(hp<=0) {
-          monster.dataset.alive="false";
-          monster.setAttribute('visible','false');
-          monstersDefeated++;
-          document.getElementById('quest').innerHTML = monstersDefeated < 2
-            ? `<b>Quest:</b> Defeat ${2 - monstersDefeated} more monsters!`
-            : `<b>Quest:</b> Find a magical portal to discover new spells!`;
-        }
+    // --- Dialogue ---
+    function showDialogue(npc, text) {
+      document.getElementById('dialogue-npc').textContent = npc;
+      document.getElementById('dialogue-text').textContent = text;
+      document.getElementById('dialogue-box').style.display = 'flex';
+    }
+    function closeDialogue() {
+      document.getElementById('dialogue-box').style.display = 'none';
+    }
+
+    // --- Hotbar interaction ---
+    document.querySelectorAll('.hotbar-slot').forEach((el, idx) => {
+      el.addEventListener('click', () => {
+        selectAbility(idx);
       });
     });
+    function selectAbility(idx) {
+      selectedAbility = idx;
+      document.querySelectorAll('.hotbar-slot').forEach((el, i) => {
+        if (i === idx) el.classList.add('active');
+        else el.classList.remove('active');
+      });
+    }
 
-    // --- Mouse attack control: simulates click on monsters in front ---
-    window.addEventListener('mousedown', e=>{
-      if(playerHealth<=0) return;
-      const player = document.getElementById('player');
-      const cam = player.object3D;
-      const origin = cam.position.clone();
-      const direction = new THREE.Vector3(0,0,-1).applyQuaternion(cam.quaternion);
-      let hit = null, minDist = 0.43;
-      monsters.forEach(monster=>{
-        if(monster.dataset.alive==="false") return;
-        const mpos = monster.object3D.position.clone();
-        const toM = mpos.clone().sub(origin);
-        const projected = toM.dot(direction);
-        if(projected>0 && projected<minDist) {
-          const closest = origin.clone().add(direction.clone().multiplyScalar(projected));
-          const d = mpos.distanceTo(closest);
-          if(d<0.14) {
-            hit = monster;
-            minDist = projected;
-          }
+    // --- Sandbox ("environmental world") ---
+    let sandboxElements = []; // {type, x, y}
+    let sandboxMode = "place"; // or "remove"
+    function setSandboxMode(m) { sandboxMode = m; }
+    document.getElementById("sandbox-element").addEventListener("change", (e)=>{
+      sandboxPlaceType = e.target.value;
+    });
+    let sandboxPlaceType = document.getElementById("sandbox-element").value;
+
+    // Drawing sandbox elements
+    function drawSandboxElements() {
+      sandboxElements.forEach(el => {
+        switch(el.type) {
+          case "tree":
+            ctx.save();
+            ctx.translate(el.x, el.y);
+            ctx.fillStyle = "#284f20";
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 28, 60, 0, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.fillStyle = "#3a5c3a";
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 22, 45, 0, 0, 2 * Math.PI);
+            ctx.fill();
+            // trunk
+            ctx.fillStyle = "#7b5637";
+            ctx.fillRect(-5, 34, 10, 22);
+            ctx.restore();
+            break;
+          case "rock":
+            ctx.save();
+            ctx.translate(el.x, el.y);
+            ctx.fillStyle = "#bbb";
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 18, 14, 0, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.restore();
+            break;
+          case "pond":
+            ctx.save();
+            ctx.translate(el.x, el.y);
+            ctx.fillStyle = "#4cdbff";
+            ctx.globalAlpha = 0.7;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 34, 18, 0, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
+            ctx.strokeStyle = "#aafcff";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 30, 14, 0, 0, 2 * Math.PI);
+            ctx.stroke();
+            ctx.restore();
+            break;
+          case "flower":
+            ctx.save();
+            ctx.translate(el.x, el.y);
+            for (let i = 0; i < 6; i++) {
+              ctx.save();
+              ctx.rotate((i * Math.PI) / 3);
+              ctx.fillStyle = "#ffb3e9";
+              ctx.beginPath();
+              ctx.ellipse(0, 8, 6, 10, 0, 0, 2 * Math.PI);
+              ctx.fill();
+              ctx.restore();
+            }
+            ctx.fillStyle = "#ffe066";
+            ctx.beginPath();
+            ctx.arc(0, 0, 6, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.restore();
+            break;
+          case "bush":
+            ctx.save();
+            ctx.translate(el.x, el.y);
+            ctx.fillStyle = "#2b6b40";
+            ctx.beginPath();
+            ctx.arc(0, 0, 22, 0, 2 * Math.PI);
+            ctx.arc(18, 5, 18, 0, 2 * Math.PI);
+            ctx.arc(-18, 5, 18, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.restore();
+            break;
+          case "mushroom":
+            ctx.save();
+            ctx.translate(el.x, el.y);
+            // cap
+            ctx.fillStyle = "#ff5e5e";
+            ctx.beginPath();
+            ctx.ellipse(0, 0, 10, 7, 0, Math.PI, 2 * Math.PI);
+            ctx.fill();
+            // stem
+            ctx.fillStyle = "#fffbe6";
+            ctx.fillRect(-3, 0, 6, 12);
+            ctx.restore();
+            break;
         }
       });
-      if(hit) hit.emit('click');
+    }
+
+    // --- Game "Rendering" ---
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    function drawForestBG() {
+      // Simple painterly forest
+      ctx.fillStyle = "#274027";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Large forest background trees
+      for (let i = 0; i < 12; i++) {
+        let x = (canvas.width/12) * i + 30 * Math.sin(i*2);
+        ctx.fillStyle = "#284f20";
+        ctx.beginPath();
+        ctx.ellipse(x, 250 + 60*Math.sin(i), 50+18*Math.cos(i), 120, 0, 0, 2*Math.PI);
+        ctx.fill();
+        ctx.fillStyle = "#3a5c3a";
+        ctx.beginPath();
+        ctx.ellipse(x, 250 + 60*Math.sin(i), 38+12*Math.cos(i), 90, 0, 0, 2*Math.PI);
+        ctx.fill();
+      }
+      // Bushes
+      for (let i = 0; i < 20; i++) {
+        let x = (canvas.width/20) * i + 10 * Math.sin(i*1.8);
+        let y = 420 + 12 * Math.cos(i*1.3);
+        ctx.fillStyle = "#2b6b40";
+        ctx.beginPath();
+        ctx.arc(x, y, 28 + 6*Math.sin(i), 0, 2*Math.PI);
+        ctx.fill();
+      }
+
+      // Sparkles for magic
+      for (let i = 0; i < 50; i++) {
+        let x = Math.random() * canvas.width;
+        let y = Math.random() * 500;
+        ctx.fillStyle = `rgba(110,255,177,${0.06+Math.random()*0.08})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 1.7+Math.random()*1.1, 0, 2*Math.PI);
+        ctx.fill();
+      }
+    }
+
+    function drawEntities() {
+      // Enemies
+      enemies.forEach(e => {
+        if (!e.alive) return;
+        ctx.save();
+        ctx.translate(e.x, e.y);
+        // Body
+        ctx.beginPath();
+        ctx.arc(0, 0, 20, 0, 2*Math.PI);
+        ctx.fillStyle = "#c2f7ff";
+        ctx.shadowColor = "#8ff";
+        ctx.shadowBlur = 25;
+        ctx.fill();
+
+        // Eyes
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = "#223";
+        ctx.beginPath();
+        ctx.arc(-7, -2, 2, 0, 2*Math.PI);
+        ctx.arc(7, -2, 2, 0, 2*Math.PI);
+        ctx.fill();
+
+        // Name
+        ctx.font = "bold 15px Segoe UI";
+        ctx.fillStyle = "#fff";
+        ctx.shadowColor = "#333";
+        ctx.shadowBlur = 2;
+        ctx.textAlign = "center";
+        ctx.fillText(e.name, 0, -28);
+        ctx.restore();
+
+        // HP Bar
+        ctx.save();
+        ctx.translate(e.x-18, e.y+24);
+        ctx.fillStyle = "#444";
+        ctx.fillRect(0, 0, 36, 6);
+        ctx.fillStyle = "#6fffb1";
+        ctx.fillRect(0, 0, 36*(e.hp/e.maxHp), 6);
+        ctx.restore();
+      });
+
+      // NPCs
+      npcs.forEach(n => {
+        ctx.save();
+        ctx.translate(n.x, n.y);
+        ctx.beginPath();
+        ctx.arc(0, 0, 18, 0, 2 * Math.PI);
+        ctx.fillStyle = "#ffe066";
+        ctx.shadowColor = "#fff6a0";
+        ctx.shadowBlur = 18;
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.font = "bold 14px Segoe UI";
+        ctx.fillStyle = "#222";
+        ctx.textAlign = "center";
+        ctx.fillText(n.name, 0, -26);
+        ctx.restore();
+      });
+    }
+
+    // --- Input / Interactions ---
+    // Simulate "clicking" NPCs or enemies or sandbox elements
+    canvas.addEventListener('mousedown', function(evt) {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = evt.clientX - rect.left;
+      const mouseY = evt.clientY - rect.top;
+
+      // Sandbox interaction (priority)
+      if (sandboxMode === "place") {
+        // Don't place over NPC or enemy
+        let onEntity = false;
+        for (let n of npcs) {
+          let dx = mouseX-n.x, dy = mouseY-n.y;
+          if (dx*dx + dy*dy < 32*32) onEntity = true;
+        }
+        for (let e of enemies) {
+          let dx = mouseX-e.x, dy = mouseY-e.y;
+          if (dx*dx + dy*dy < 28*28) onEntity = true;
+        }
+        if (!onEntity) {
+          sandboxElements.push({type: sandboxPlaceType, x: mouseX, y: mouseY});
+        }
+        return;
+      } else if (sandboxMode === "remove") {
+        // Remove closest sandbox element within radius
+        let idx = sandboxElements.findIndex(el => {
+          let dx = mouseX-el.x, dy = mouseY-el.y;
+          return (dx*dx + dy*dy < 30*30);
+        });
+        if (idx !== -1) sandboxElements.splice(idx, 1);
+        return;
+      }
+
+      // Check if clicked on NPC
+      for (let n of npcs) {
+        let dx = mouseX-n.x, dy = mouseY-n.y;
+        if (dx*dx + dy*dy < 24*24) {
+          showDialogue(n.name, n.questText);
+          return;
+        }
+      }
+
+      // Check if clicked on alive enemy
+      for (let e of enemies) {
+        if (!e.alive) continue;
+        let dx = mouseX-e.x, dy = mouseY-e.y;
+        if (dx*dx + dy*dy < 22*22) {
+          // Attack with selected ability
+          let dmg = 7 + player.magic + (selectedAbility === 3 ? 5 : 0); // Fireball does more
+          e.takeDamage(dmg);
+          showDialogue("Battle", `You hit ${e.name} for ${dmg} damage!`);
+          updateEnemiesList();
+          updateStatsDisplay();
+          return;
+        }
+      }
     });
 
-    setHealth(playerHealth);
-    window.addEventListener('DOMContentLoaded',()=>{ updateHeldItem(); });
+    // Keyboard: 1-4 for hotbar, Q for close dialogue, S for sandbox place, R for sandbox remove
+    window.addEventListener('keydown', function(e){
+      if (e.key >= '1' && e.key <= '4') selectAbility(Number(e.key)-1);
+      if (e.key === 'q') closeDialogue();
+      if (e.key === 's') setSandboxMode('place');
+      if (e.key === 'r') setSandboxMode('remove');
+    });
+
+    // --- Main Loop ---
+    function mainLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawForestBG();
+      drawSandboxElements();
+      drawEntities();
+      requestAnimationFrame(mainLoop);
+    }
+    mainLoop();
+
+    // --- Initial UI update ---
+    updateStatsDisplay();
+    updateEnemiesList();
+
+    // --- Responsive UI on load ---
+    window.addEventListener('load', resizeCanvas);
+
+    // --- Touch/VR note ---
+    // This is a desktop/web simulation of a VR adventure.
+    // For true VR: port to A-Frame, three.js, or Unity WebGL/XR.
   </script>
 </body>
 </html>
