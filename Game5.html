@@ -1,629 +1,620 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>VR Magic Adventure - Forest Sandbox Start</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      background: #202834;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      color: #f5f5fa;
-    }
-    #game-canvas {
-      width: 100vw;
-      height: 100vh;
-      background: radial-gradient(ellipse at center, #3a5c3a 0%, #1b2b1b 100%);
-      display: block;
-      position: absolute;
-      top: 0; left: 0;
-      z-index: 1;
-      cursor: crosshair;
-    }
-    #ui-overlay {
-      position: absolute;
-      width: 100vw;
-      height: 100vh;
-      top: 0; left: 0;
-      z-index: 2;
-      pointer-events: none;
-    }
-    #hotbar {
-      position: absolute;
-      left: 50%;
-      bottom: 3%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 12px;
-      background: rgba(20,20,30,0.7);
-      padding: 12px 24px;
-      border-radius: 18px;
-      box-shadow: 0 4px 18px #000a;
-      pointer-events: auto;
-    }
-    .hotbar-slot {
-      width: 48px;
-      height: 48px;
-      background: rgba(60,70,90,0.85);
-      border-radius: 10px;
-      border: 2px solid #6fffb1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: border 0.2s;
-    }
-    .hotbar-slot.active {
-      border: 2.5px solid #fff6a0;
-      box-shadow: 0 0 10px #fff6a0aa;
-    }
-    .hotbar-slot img {
-      width: 36px;
-      height: 36px;
-      opacity: 0.95;
-    }
-    #xp-bar-container {
-      position: absolute;
-      left: 50%;
-      bottom: 10%;
-      transform: translateX(-50%);
-      width: 340px;
-      height: 16px;
-      background: #303a35;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px #000a;
-      z-index: 3;
-    }
-    #xp-bar {
-      height: 100%;
-      background: linear-gradient(90deg, #ffe066 20%, #6fffb1 100%);
-      border-radius: 8px;
-      transition: width 0.4s;
-    }
-    #dialogue-box {
-      position: absolute;
-      left: 50%;
-      top: 65%;
-      transform: translate(-50%, -50%);
-      background: rgba(30, 30, 50, 0.92);
-      border-radius: 18px;
-      box-shadow: 0 2px 18px #0007;
-      padding: 28px 36px 24px 36px;
-      min-width: 320px;
-      max-width: 480px;
-      font-size: 1.1rem;
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      z-index: 5;
-      text-align: center;
-    }
-    #dialogue-box button {
-      margin-top: 18px;
-      padding: 8px 16px;
-      background: #6fffb1;
-      border: none;
-      border-radius: 8px;
-      font-weight: bold;
-      color: #1b2b1b;
-      cursor: pointer;
-      font-size: 1rem;
-      transition: background 0.2s;
-    }
-    #dialogue-box button:hover {
-      background: #ffe066;
-    }
-    #player-stats {
-      position: absolute;
-      top: 3%;
-      left: 2.5%;
-      background: rgba(20,20,30,0.8);
-      border-radius: 10px;
-      padding: 14px 20px 10px 16px;
-      font-size: 1.05rem;
-      box-shadow: 0 2px 10px #0008;
-      z-index: 5;
-      pointer-events: auto;
-    }
-    #enemies-info {
-      position: absolute;
-      top: 3%;
-      right: 3.5%;
-      background: rgba(30,40,60,0.7);
-      border-radius: 10px;
-      padding: 10px 18px 8px 16px;
-      font-size: 1rem;
-      box-shadow: 0 2px 10px #0007;
-      z-index: 4;
-    }
-    #sandbox-controls {
-      position: absolute;
-      right: 24px;
-      bottom: 17%;
-      background: rgba(60,70,90,0.8);
-      border-radius: 14px;
-      box-shadow: 0 2px 8px #0007;
-      padding: 10px 18px;
-      font-size: 1rem;
-      z-index: 10;
-      pointer-events: auto;
-      display: flex;
-      flex-direction: column;
-      align-items: flex-end;
-      gap: 8px;
-    }
-    #sandbox-controls label {
-      font-size: 0.96rem;
-    }
-    #sandbox-controls select, #sandbox-controls button {
-      margin-top: 5px;
-      padding: 3px 8px;
-      border-radius: 6px;
-      border: 1.5px solid #6fffb1;
-      background: #222;
-      color: #fff;
-      font-size: 1rem;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    #sandbox-controls button:hover {
-      background: #6fffb1;
-      color: #1b2b1b;
-    }
-  </style>
+<meta charset="utf-8" />
+<title>Magic Survival — Upgraded</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+<style>
+  html,body{height:100%;margin:0;background:#000;font-family:system-ui,Segoe UI,Roboto,Arial}
+  #ui-root{position:absolute;inset:0;z-index:9999;pointer-events:auto}
+  /* HUD */
+  #hud{position:absolute;left:12px;top:12px;color:#fff;width:360px;z-index:10000}
+  .label-row{display:flex;justify-content:space-between;font-size:13px}
+  .bar-wrap{margin:6px 0;background:rgba(0,0,0,0.55);padding:6px;border-radius:10px;border:1px solid rgba(255,255,255,0.04)}
+  .bar{height:14px;border-radius:8px;background:#222;overflow:hidden}
+  .fill{height:100%;transition:width .25s}
+  .hp-fill{background:linear-gradient(90deg,#ff6a6a,#ff2a2a)}
+  .stam-fill{background:linear-gradient(90deg,#7ee7ff,#00b7ff)}
+  .mana-fill{background:linear-gradient(90deg,#b28bff,#6b43ff)}
+  /* hotbar */
+  #hotbar{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);display:flex;gap:10px;padding:10px;border-radius:12px;background:rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.06);z-index:10000}
+  .hotbar-item{width:56px;height:56px;background:#222;border-radius:8px;display:flex;align-items:center;justify-content:center;border:2px solid #ddd;cursor:pointer;position:relative}
+  .hotbar-item img{width:36px;height:36px;user-select:none;-webkit-user-drag:none}
+  .hotbar-item.selected{border-color:#39ffb6;box-shadow:0 0 12px #39ffb6}
+  .hotbar-key{position:absolute;bottom:-16px;left:0;right:0;text-align:center;color:#fff;font-size:12px}
+  #more-btn{width:40px;height:40px;border-radius:999px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);color:#fff;font-size:20px}
+  /* backpack */
+  #backpack{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92vw,920px);height:min(80vh,520px);background:rgba(6,6,8,0.95);border-radius:12px;color:#fff;padding:12px;display:none;z-index:10010;border:1px solid rgba(255,255,255,0.04)}
+  #backpack.open{display:block}
+  .inv-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:8px;background:rgba(255,255,255,0.02);border-radius:8px;flex:2;overflow:auto}
+  .slot{height:72px;background:#101012;border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative;border:1px solid rgba(255,255,255,0.03);cursor:pointer}
+  .qty{position:absolute;right:6px;bottom:6px;font-size:12px;opacity:0.9}
+  /* state upgrades */
+  #upgrades{position:absolute;left:12px;bottom:14px;background:rgba(0,0,0,0.6);padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,0.05);z-index:10000;color:#fff}
+  #state{position:absolute;right:12px;top:12px;background:rgba(0,0,0,0.6);padding:10px;border-radius:10px;color:#fff;border:1px solid rgba(255,255,255,0.06);z-index:10000;width:220px}
+  #preview{position:absolute;right:12px;bottom:12px;width:260px;height:150px;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.06);z-index:10000}
+  #damage-flash{position:absolute;inset:0;background:rgba(255,0,0,0.12);opacity:0;pointer-events:none;transition:opacity .15s;z-index:10005}
+  #prompt{position:absolute;left:50%;top:64%;transform:translateX(-50%);background:rgba(0,0,0,0.6);color:#fff;padding:6px 10px;border-radius:8px;z-index:10005;display:none}
+  /* small text */
+  .muted{opacity:.85;font-size:13px}
+</style>
 </head>
 <body>
-  <canvas id="game-canvas"></canvas>
-  <div id="ui-overlay">
-    <div id="hotbar">
-      <div class="hotbar-slot active" id="slot-0"><img src="https://cdn-icons-png.flaticon.com/512/535/535137.png" title="Magic Bolt" /></div>
-      <div class="hotbar-slot" id="slot-1"><img src="https://cdn-icons-png.flaticon.com/512/535/535234.png" title="Shield" /></div>
-      <div class="hotbar-slot" id="slot-2"><img src="https://cdn-icons-png.flaticon.com/512/535/535239.png" title="Heal" /></div>
-      <div class="hotbar-slot" id="slot-3"><img src="https://cdn-icons-png.flaticon.com/512/535/535127.png" title="Fireball" /></div>
-    </div>
-    <div id="xp-bar-container">
-      <div id="xp-bar" style="width: 15%"></div>
-    </div>
-    <div id="dialogue-box">
-      <div id="dialogue-npc" style="font-weight: bold; margin-bottom: 12px;"></div>
-      <div id="dialogue-text"></div>
-      <button onclick="closeDialogue()">Close</button>
-    </div>
-    <div id="player-stats">
-      <div>Level: <span id="stat-level">1</span></div>
-      <div>XP: <span id="stat-xp">0</span> / <span id="stat-xp-next">100</span></div>
-      <div>Strength: <span id="stat-str">5</span></div>
-      <div>Magic: <span id="stat-mag">5</span></div>
-      <div>Agility: <span id="stat-agi">5</span></div>
-    </div>
-    <div id="enemies-info">
-      <b>Nearby Enemies:</b>
-      <div id="enemies-list"></div>
-    </div>
-    <div id="sandbox-controls">
-      <label><b>Sandbox Tools</b></label>
-      <select id="sandbox-element">
-        <option value="tree">Tree</option>
-        <option value="rock">Rock</option>
-        <option value="pond">Pond</option>
-        <option value="flower">Flower</option>
-        <option value="bush">Bush</option>
-        <option value="mushroom">Mushroom</option>
-      </select>
-      <button onclick="setSandboxMode('place')">Place</button>
-      <button onclick="setSandboxMode('remove')">Remove</button>
-      <div style="font-size:0.82rem;color:#6fffb1;">Click anywhere to place/remove.</div>
+<div id="ui-root">
+  <div id="hud">
+    <div class="label-row"><strong>Level <span id="level">1</span></strong><div>XP <span id="xp">0</span>/<span id="xpMax">100</span></div></div>
+    <div style="margin-top:8px" class="label-row"><span>Health</span><span id="hpText">100/100</span></div>
+    <div class="bar-wrap"><div class="bar"><div id="hpBar" class="fill hp-fill" style="width:100%"></div></div></div>
+
+    <div class="label-row"><span>Stamina</span><span id="stamText">100/100</span></div>
+    <div class="bar-wrap"><div class="bar"><div id="stamBar" class="fill stam-fill" style="width:100%"></div></div></div>
+
+    <div class="label-row"><span>Mana</span><span id="manaText">60/60</span></div>
+    <div class="bar-wrap"><div class="bar"><div id="manaBar" class="fill mana-fill" style="width:100%"></div></div></div>
+
+    <div style="margin-top:8px;background:rgba(255,255,255,0.03);padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03)" class="muted">
+      <div style="font-weight:700">Quest</div>
+      <div id="quest">Talk to the Forest Elder</div>
     </div>
   </div>
-  <script>
-    // --- Game Data Structures ---
-    const player = {
-      level: 1,
-      xp: 0,
-      xpToNext: 100,
-      strength: 5,
-      magic: 5,
-      agility: 5,
-      abilities: [
-        { name: "Magic Bolt", icon: "https://cdn-icons-png.flaticon.com/512/535/535137.png" },
-        { name: "Shield", icon: "https://cdn-icons-png.flaticon.com/512/535/535234.png" },
-        { name: "Heal", icon: "https://cdn-icons-png.flaticon.com/512/535/535239.png" },
-        { name: "Fireball", icon: "https://cdn-icons-png.flaticon.com/512/535/535127.png" }
-      ]
+
+  <div id="hotbar" role="toolbar" aria-label="Hotbar">
+    <div class="hotbar-item" data-item="" title="Slot 1"><div class="hotbar-key">1</div></div>
+    <div class="hotbar-item" data-item="" title="Slot 2"><div class="hotbar-key">2</div></div>
+    <div class="hotbar-item" data-item="" title="Slot 3"><div class="hotbar-key">3</div></div>
+    <div id="more-btn" title="Open Backpack">⋯</div>
+  </div>
+
+  <div id="backpack">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-weight:800">Backpack</div>
+      <div><button id="close-bp">Close</button></div>
+    </div>
+    <div style="display:flex;gap:12px;height:calc(100% - 44px)">
+      <div class="inv-grid" id="inv-grid" style="flex:2"></div>
+      <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+        <div style="background:rgba(255,255,255,0.02);padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03)">
+          <div style="font-weight:700;margin-bottom:6px">Crafting</div>
+          <div id="craft-list"></div>
+        </div>
+        <div style="background:rgba(255,255,255,0.02);padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03)">
+          <div id="desc">Select a recipe</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="upgrades">
+    <div style="font-weight:700;margin-bottom:6px">Upgrade States (XP)</div>
+    <div style="display:flex;gap:6px">
+      <button id="up-hp">+HP (50 XP)</button>
+      <button id="up-stam">+Stam (30 XP)</button>
+      <button id="up-mana">+Mana (30 XP)</button>
+    </div>
+    <div class="muted" style="margin-top:6px">XP: <span id="xp_small">0</span></div>
+  </div>
+
+  <div id="state">
+    <div><strong>Equipped:</strong> <span id="equipped">None</span></div>
+    <div><strong>Status:</strong> <span id="status">Idle</span></div>
+    <div><strong>Hydration:</strong> <span id="hydration">100%</span></div>
+    <div><strong>Food:</strong> <span id="food">100%</span></div>
+    <div><strong>Enemies Nearby:</strong> <span id="enemyCount">0</span></div>
+  </div>
+
+  <div id="preview"><img src="https://images.unsplash.com/photo-1549880338-65ddcdfd017b?q=80&w=1200&auto=format&fit=crop" style="width:100%;height:100%;object-fit:cover"></div>
+  <div id="damage-flash"></div>
+  <div id="prompt">Press E to interact</div>
+</div>
+
+<!-- A-Frame Scene -->
+<a-scene renderer="antialias:true; colorManagement:true" shadow="type:pcfsoft">
+  <a-assets>
+    <img id="grassTex" src="https://images.unsplash.com/photo-1501004318641-b39e6451bec6?q=80&w=1200&auto=format&fit=crop" crossorigin="anonymous">
+    <img id="skyTex" src="https://images.unsplash.com/photo-1502082553048-f009c37129b9?q=80&w=2000&auto=format&fit=crop" crossorigin="anonymous">
+    <img id="bark" src="https://images.unsplash.com/photo-1578926375605-eaf7559b1458?q=80&w=1200&auto=format&fit=crop" crossorigin="anonymous">
+  </a-assets>
+
+  <a-entity light="type:ambient; color:#bbb; intensity:0.7"></a-entity>
+  <a-entity light="type:directional; intensity:1" position="5 12 -3" rotation="-45 30 0" shadow="cast:true"></a-entity>
+
+  <a-plane id="ground" src="#grassTex" rotation="-90 0 0" width="160" height="160" material="repeat: 40 40; roughness: 1" shadow="receive:true"></a-plane>
+  <a-sky src="#skyTex"></a-sky>
+
+  <!-- Castle -->
+  <a-entity id="castle" position="0 0 -42">
+    <a-box color="#444" width="20" height="12" depth="20" position="0 6 0" shadow="cast:true"></a-box>
+    <a-text value="Dark Castle" color="#fff" position="-4 14 -2" scale="3 3 3"></a-text>
+  </a-entity>
+
+  <!-- NPC group -->
+  <a-entity id="npc-group" position="0 0 -4">
+    <a-box id="npc" color="#FFD700" position="0 1 0" depth="0.6" height="2" width="1.2" class="clickable" shadow="cast:true"></a-box>
+    <a-text value="Forest Elder (E to talk)" position="-1.6 2.6 0" color="#fff" align="center"></a-text>
+  </a-entity>
+
+  <!-- containers -->
+  <a-entity id="trees"></a-entity>
+  <a-entity id="boulders"></a-entity>
+  <a-entity id="collectibles"></a-entity>
+  <a-entity id="enemies"></a-entity>
+
+  <!-- ponds -->
+  <a-circle id="pond1" radius="1.2" color="#2aa3ff" position="-3 0.01 -3" rotation="-90 0 0" opacity="0.9" class="clickable"></a-circle>
+  <a-circle id="pond2" radius="1.4" color="#2aa3ff" position="4 0.01 -6" rotation="-90 0 0" opacity="0.9" class="clickable"></a-circle>
+
+  <!-- player rig -->
+  <a-entity id="player" position="0 1.6 0">
+    <a-entity id="cameraRig" position="0 0 0">
+      <a-entity camera id="camera" look-controls wasd-controls position="0 0 0"></a-entity>
+    </a-entity>
+  </a-entity>
+</a-scene>
+
+<script>
+/* -------------------------
+   Game State & Config
+   ------------------------- */
+const state = {
+  hp: 100, hpMax: 100,
+  stamina: 100, staminaMax: 100,
+  mana: 60, manaMax: 60,
+  hydration: 100, food: 100,
+  xp: 0, xpMax: 100, level: 1,
+  equipped: '', // start empty - must craft
+  spells: [{id:'spark',name:'Spark',charges:3,max:3,dmg:15,cost:5}],
+  knownSpells: new Set(['spark']),
+  quest: 'Talk to the Forest Elder',
+  inventory: { stick:0, rock:0, mushroom:0, potion:0, water:0, 'wood-staff':0, 'stone-axe':0 }
+};
+
+const recipes = [
+  {id:'stone-axe', name:'Stone Axe', need:{stick:2,rock:1}, desc:'A crafted axe for chopping and stronger melee.'},
+  {id:'wood-staff', name:'Wood Staff', need:{stick:3}, desc:'Basic staff — improves spell damage.'},
+  {id:'potion', name:'Healing Potion', need:{mushroom:2,water:1}, desc:'Restores 40 HP.'},
+  {id:'fireball', name:'Spell: Fireball', need:{mushroom:1,stick:1}, desc:'Unlocks Fireball spell.'}
+];
+
+const MAX_ENEMIES = 7;
+const enemiesRoot = document.getElementById('enemies');
+const treesRoot = document.getElementById('trees');
+const bouldersRoot = document.getElementById('boulders');
+const collRoot = document.getElementById('collectibles');
+
+/* -------------------------
+   UI helpers bindings
+   ------------------------- */
+const $ = s => document.querySelector(s);
+const hpBar = $('#hpBar'), stamBar = $('#stamBar'), manaBar = $('#manaBar');
+const hpText = $('#hpText'), stamText = $('#stamText'), manaText = $('#manaText');
+const hydrationEl = $('#hydration'), foodEl = $('#food'), enemyCountEl = $('#enemyCount');
+const xpEl = $('#xp'), xpMaxEl = $('#xpMax'), lvlEl = $('#level');
+const questEl = $('#quest'), equippedEl = $('#equipped'), statusEl = $('#status');
+const xp_small = $('#xp_small');
+
+function refreshUI(){
+  hpBar.style.width = (state.hp/state.hpMax*100)+'%';
+  stamBar.style.width = (state.stamina/state.staminaMax*100)+'%';
+  manaBar.style.width = (state.mana/state.manaMax*100)+'%';
+  hpText.textContent = `${Math.round(state.hp)}/${state.hpMax}`;
+  stamText.textContent = `${Math.round(state.stamina)}/${state.staminaMax}`;
+  manaText.textContent = `${Math.round(state.mana)}/${state.manaMax}`;
+  hydrationEl.textContent = `${Math.round(state.hydration)}%`;
+  foodEl.textContent = `${Math.round(state.food)}%`;
+  xpEl.textContent = state.xp; xpMaxEl.textContent = state.xpMax; lvlEl.textContent = state.level;
+  questEl.textContent = state.quest;
+  equippedEl.textContent = state.equipped || 'None';
+  statusEl.textContent = statusEl.textContent || 'Idle';
+  xp_small.textContent = state.xp;
+  renderInventory(); renderCrafting(); updateEnemyCount();
+}
+refreshUI();
+
+/* -------------------------
+   Inventory / Crafting / Hotbar
+   ------------------------- */
+const hotbarItems = document.querySelectorAll('.hotbar-item');
+hotbarItems.forEach((el,i)=>el.addEventListener('click', ()=> {
+  const item = el.dataset.item;
+  if(item){ state.equipped = item; statusPulse('Equipped: '+item); refreshUI(); }
+}));
+document.addEventListener('keydown', e=>{
+  const k = parseInt(e.key,10);
+  if(k>=1 && k<=hotbarItems.length) hotbarItems[k-1].click();
+});
+
+$('#more-btn').onclick = ()=>$('#backpack').classList.add('open');
+$('#close-bp').onclick = ()=>$('#backpack').classList.remove('open');
+
+function iconFor(id){
+  const map = {
+    'stick':'https://cdn-icons-png.flaticon.com/512/848/848043.png',
+    'rock':'https://cdn-icons-png.flaticon.com/512/3454/3454359.png',
+    'mushroom':'https://cdn-icons-png.flaticon.com/512/590/590685.png',
+    'potion':'https://cdn-icons-png.flaticon.com/512/2909/2909730.png',
+    'water':'https://cdn-icons-png.flaticon.com/512/3239/3239952.png',
+    'wood-staff':'https://cdn-icons-png.flaticon.com/512/2910/2910772.png',
+    'stone-axe':'https://cdn-icons-png.flaticon.com/512/2910/2910768.png'
+  };
+  return map[id] || map['stick'];
+}
+
+function renderInventory(){
+  const invGrid = $('#inv-grid'); if(!invGrid) return;
+  invGrid.innerHTML = '';
+  Object.keys(state.inventory).forEach(k=>{
+    const qty = state.inventory[k]||0;
+    const slot = document.createElement('div'); slot.className='slot';
+    slot.innerHTML = `<img src="${iconFor(k)}" style="width:40px;height:40px"><div class="qty">x${qty}</div>`;
+    slot.addEventListener('click', ()=>{
+      // equip or use
+      if((k==='stone-axe' || k==='wood-staff') && qty>0){ state.equipped = k; statusPulse('Equipped: '+k); }
+      if(k==='potion' && qty>0){ state.inventory.potion--; state.hp = Math.min(state.hp + 40, state.hpMax); statusPulse('Used potion +40 HP'); }
+      refreshUI();
+    });
+    invGrid.appendChild(slot);
+  });
+}
+
+function renderCrafting(){
+  const craftList = $('#craft-list'); craftList.innerHTML = '';
+  recipes.forEach(rc=>{
+    const row = document.createElement('div'); row.style.display='flex';row.style.justifyContent='space-between';row.style.alignItems='center';row.style.padding='6px 0';row.style.borderBottom='1px dashed rgba(255,255,255,0.03)';
+    const left = document.createElement('div'); left.innerHTML = `<div style="font-weight:600">${rc.name}</div><div style="font-size:12px;opacity:.85">${Object.entries(rc.need).map(([k,v])=>v+'× '+k).join(', ')}</div>`;
+    const btn = document.createElement('button'); btn.textContent='Craft';
+    btn.disabled = !Object.entries(rc.need).every(([k,v]) => (state.inventory[k]||0) >= v);
+    btn.onclick = ()=>{
+      Object.entries(rc.need).forEach(([k,v])=> state.inventory[k]-=v);
+      state.inventory[rc.id] = (state.inventory[rc.id]||0) + (rc.id==='potion'?1:1);
+      if(rc.id==='fireball' && !state.knownSpells.has('fireball')){ state.knownSpells.add('fireball'); state.spells.push({id:'fireball',name:'Fireball',charges:2,max:2,dmg:35,cost:15}); statusPulse('Learned Fireball'); }
+      statusPulse(rc.name + ' crafted');
+      refreshUI();
     };
-    let selectedAbility = 0;
+    row.appendChild(left); row.appendChild(btn); craftList.appendChild(row);
+  });
+}
 
-    function updateStatsDisplay() {
-      document.getElementById('stat-level').textContent = player.level;
-      document.getElementById('stat-xp').textContent = player.xp;
-      document.getElementById('stat-xp-next').textContent = player.xpToNext;
-      document.getElementById('stat-str').textContent = player.strength;
-      document.getElementById('stat-mag').textContent = player.magic;
-      document.getElementById('stat-agi').textContent = player.agility;
-      document.getElementById('xp-bar').style.width = Math.min((player.xp / player.xpToNext) * 100, 100) + "%";
+/* -------------------------
+   Upgrades (spend XP)
+   ------------------------- */
+$('#up-hp').onclick = ()=>{
+  if(state.xp >= 50){ state.xp -= 50; state.hpMax += 15; state.hp = state.hpMax; statusPulse('Max HP increased'); refreshUI(); } else statusPulse('Not enough XP');
+};
+$('#up-stam').onclick = ()=>{
+  if(state.xp >= 30){ state.xp -= 30; state.staminaMax += 15; state.stamina = state.staminaMax; statusPulse('Max Stamina increased'); refreshUI(); } else statusPulse('Not enough XP');
+};
+$('#up-mana').onclick = ()=>{
+  if(state.xp >= 30){ state.xp -= 30; state.manaMax += 12; state.mana = state.manaMax; statusPulse('Max Mana increased'); refreshUI(); } else statusPulse('Not enough XP');
+};
+
+/* -------------------------
+   Environment: trees + boulders (minable)
+   ------------------------- */
+function spawnTree(x,z, hp=30){
+  const ent = document.createElement('a-entity');
+  ent.setAttribute('position', `${x} 0 ${z}`);
+  // trunk
+  const trunk = document.createElement('a-cylinder'); trunk.setAttribute('height','2'); trunk.setAttribute('radius','0.25'); trunk.setAttribute('color','#8B5A2B'); trunk.setAttribute('position','0 1 0'); trunk.setAttribute('material','src:#bark; roughness:1');
+  // leaves
+  const crown = document.createElement('a-sphere'); crown.setAttribute('radius','1.1'); crown.setAttribute('position','0 2.1 0'); crown.setAttribute('color','#0b6b2e');
+  ent.appendChild(trunk); ent.appendChild(crown);
+  ent.classList.add('tree');
+  ent.__data = { hp: hp };
+  // clicking the tree attempts to chop
+  ent.addEventListener('click', ()=> {
+    chopEntity(ent, 'tree');
+  });
+  treesRoot.appendChild(ent);
+}
+function spawnBoulder(x,z, hp=40){
+  const e = document.createElement('a-entity');
+  e.setAttribute('position', `${x} 0 ${z}`);
+  const rock = document.createElement('a-sphere'); rock.setAttribute('radius','0.6'); rock.setAttribute('color','#777'); rock.setAttribute('position','0 0.6 0');
+  e.appendChild(rock);
+  e.classList.add('boulder');
+  e.__data = { hp: hp };
+  e.addEventListener('click', ()=> { chopEntity(e, 'boulder'); });
+  bouldersRoot.appendChild(e);
+}
+
+function chopEntity(ent, type){
+  // if equipped with stone-axe, faster; else slow
+  const tool = state.equipped;
+  const power = (tool === 'stone-axe') ? 12 : (tool === 'wood-staff' ? 3 : 4);
+  ent.__data.hp -= power;
+  statusPulse(`${type} hit -${power}`);
+  if(ent.__data.hp <= 0){
+    // spawn resources
+    const pos = ent.object3D.position;
+    if(type==='tree'){
+      // spawn 2 sticks + maybe mushrooms
+      spawnCollectible('stick', {x: pos.x + (Math.random()-0.5), z: pos.z + (Math.random()-0.5)});
+      spawnCollectible('stick', {x: pos.x + (Math.random()-0.5), z: pos.z + (Math.random()-0.5)});
+      if(Math.random()<0.4) spawnCollectible('mushroom', {x: pos.x + (Math.random()-0.5), z: pos.z + (Math.random()-0.5)});
+    } else {
+      // boulder: rocks
+      spawnCollectible('rock', {x: pos.x + (Math.random()-0.5), z: pos.z + (Math.random()-0.5)});
+      spawnCollectible('rock', {x: pos.x + (Math.random()-0.5), z: pos.z + (Math.random()-0.5)});
     }
+    // remove entity
+    if(ent.parentNode) ent.parentNode.removeChild(ent);
+  }
+}
 
-    // Level up logic
-    function gainXP(amount) {
-      player.xp += amount;
-      if (player.xp >= player.xpToNext) {
-        player.xp -= player.xpToNext;
-        player.level += 1;
-        player.xpToNext = Math.floor(player.xpToNext * 1.5);
-        player.strength += 1;
-        player.magic += 1;
-        player.agility += 1;
-        showDialogue("System", "Level up! You are now level " + player.level + ". Stats increased.");
+/* seed environment (near player) */
+for(let i=0;i<12;i++) spawnTree((Math.random()*16-8).toFixed(2), (Math.random()*16-8).toFixed(2));
+for(let i=0;i<8;i++) spawnBoulder((Math.random()*16-8).toFixed(2), (Math.random()*16-8).toFixed(2));
+
+/* -------------------------
+   Collectibles spawn + pickup
+   ------------------------- */
+function spawnCollectible(type, pos){
+  const e = document.createElement('a-entity'); e.setAttribute('position', `${pos.x} 0 ${pos.z}`);
+  e.__type = type;
+  if(type==='stick') e.innerHTML = `<a-cylinder color="#7a522a" height="0.6" radius="0.05" position="0 0.3 0"></a-cylinder>`;
+  if(type==='rock') e.innerHTML = `<a-sphere color="#777" radius="0.22" position="0 0.22 0"></a-sphere>`;
+  if(type==='mushroom') e.innerHTML = `<a-cylinder color="#cfa07f" height="0.18" radius="0.05" position="0 0.09 0"></a-cylinder><a-sphere color="#ff3154" radius="0.15" position="0 0.22 0"></a-sphere>`;
+  e.classList.add('collectible','clickable');
+  // click to pick up
+  e.addEventListener('click', ()=> {
+    state.inventory[type] = (state.inventory[type]||0)+1;
+    if(e.parentNode) e.parentNode.removeChild(e);
+    statusPulse('Picked up ' + type);
+    refreshUI();
+  });
+  collRoot.appendChild(e);
+}
+
+/* seed some pickups */
+for(let i=0;i<18;i++){
+  const pos = {x:(Math.random()*18-9), z:(Math.random()*18-9)};
+  spawnCollectible(['stick','rock','mushroom'][Math.floor(Math.random()*3)], pos);
+}
+
+/* pickup by E when nearby handled in interact logic */
+
+/* -------------------------
+   Enemies: spawn with faces + HP bar; aggro only when provoked
+   ------------------------- */
+function createEnemy(x,z){
+  const e = document.createElement('a-entity'); e.setAttribute('position', `${x} 0.5 ${z}`);
+  // body
+  const body = document.createElement('a-sphere'); body.setAttribute('radius','0.5'); body.setAttribute('color','#ff5c5c'); body.setAttribute('shadow','cast:true');
+  // eyes
+  const eyeL = document.createElement('a-sphere'); eyeL.setAttribute('radius','0.07'); eyeL.setAttribute('color','#fff'); eyeL.setAttribute('position','-0.15 0.12 0.45');
+  const eyeR = document.createElement('a-sphere'); eyeR.setAttribute('radius','0.07'); eyeR.setAttribute('color','#fff'); eyeR.setAttribute('position','0.15 0.12 0.45');
+  const pupilL = document.createElement('a-sphere'); pupilL.setAttribute('radius','0.03'); pupilL.setAttribute('color','#000'); pupilL.setAttribute('position','-0.15 0.12 0.52');
+  const pupilR = document.createElement('a-sphere'); pupilR.setAttribute('radius','0.03'); pupilR.setAttribute('color','#000'); pupilR.setAttribute('position','0.15 0.12 0.52');
+  // hp plane above head (a simple text)
+  const hpText = document.createElement('a-text'); hpText.setAttribute('value','HP: 60'); hpText.setAttribute('position','0 1 0'); hpText.setAttribute('align','center'); hpText.setAttribute('color','#fff'); hpText.setAttribute('scale','1.2 1.2 1.2');
+
+  e.appendChild(body); e.appendChild(eyeL); e.appendChild(eyeR); e.appendChild(pupilL); e.appendChild(pupilR); e.appendChild(hpText);
+  e.classList.add('enemy','clickable');
+  e.__data = { hp: 60, alive: true, aggro: false, vx:0, vz:0, hpText: hpText, respawning:false };
+  // clicking an enemy provokes it (and doesn't damage directly)
+  e.addEventListener('click', ()=> { e.__data.aggro = true; statusPulse('You provoked an enemy'); });
+  enemiesRoot.appendChild(e);
+  return e;
+}
+
+/* spawn initial enemies safely away from player */
+function spawnEnemySafe(){
+  const playerPos = document.getElementById('player').object3D.position;
+  let x,z,tries=0;
+  do { x = (Math.random()*20-10); z = (Math.random()*20-10); tries++; } while(Math.hypot(x-playerPos.x,z-playerPos.z) < 5 && tries < 30);
+  createEnemy(x.toFixed(2), z.toFixed(2));
+}
+for(let i=0;i<5;i++) spawnEnemySafe();
+updateEnemyCount();
+
+function updateEnemyCount(){ $('#enemyCount').textContent = enemiesRoot.querySelectorAll('.enemy').length; }
+
+/* Enemy AI loop — allow stacking (small/no separation) */
+let lastTime = performance.now();
+function enemyLoop(now){
+  const dt = (now - lastTime) / 1000; lastTime = now;
+  const playerPos = document.getElementById('player').object3D.position;
+  const all = Array.from(enemiesRoot.children);
+  all.forEach(e=>{
+    if(!e.__data || !e.__data.alive) return;
+    const pos = e.object3D.position;
+    if(e.__data.aggro){
+      const dx = playerPos.x - pos.x, dz = playerPos.z - pos.z; const dist = Math.hypot(dx,dz);
+      const len = Math.max(dist,0.001);
+      // desired velocity toward player (no separation, so they can stack closely)
+      const speed = 1.0;
+      e.__data.vx = (dx/len)*speed;
+      e.__data.vz = (dz/len)*speed;
+      pos.x += e.__data.vx * dt; pos.z += e.__data.vz * dt;
+      e.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+      if(dist < 1.0 && e.__data.cooldown <= 0){
+        // attack
+        damagePlayer(6 + Math.random()*3);
+        e.__data.cooldown = 0.9;
       }
-      updateStatsDisplay();
+    } else {
+      // idle tiny wander
+      if(Math.random() < 0.002){ e.__data.vx += (Math.random()-0.5)*0.4; e.__data.vz += (Math.random()-0.5)*0.4; }
+      e.__data.vx *= 0.98; e.__data.vz *= 0.98;
+      pos.x += e.__data.vx * dt; pos.z += e.__data.vz * dt;
+      e.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
     }
+    if(e.__data.cooldown > 0) e.__data.cooldown -= dt;
+    // update hp text
+    e.__data.hpText.setAttribute('value', `HP: ${Math.max(0, Math.round(e.__data.hp))}`);
+    // cleanup if far away
+    if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) > 70 && !e.__data.respawning){
+      if(e.parentNode) e.parentNode.removeChild(e);
+    }
+  });
+  // keep population
+  if(enemiesRoot.children.length < MAX_ENEMIES){
+    spawnEnemySafe();
+    updateEnemyCount();
+  }
+  requestAnimationFrame(enemyLoop);
+}
+requestAnimationFrame(enemyLoop);
 
-    // --- Enemies ---
-    class Enemy {
-      constructor(name, x, y) {
-        this.name = name;
-        this.level = 1;
-        this.hp = 22;
-        this.maxHp = 22;
-        this.x = x; this.y = y;
-        this.alive = true;
+/* -------------------------
+   Combat (raycast attack) & enemy HP display + death handling
+   ------------------------- */
+const cameraEl = document.querySelector('#camera');
+function raycastAttack(range=6){
+  const cam = cameraEl.object3D;
+  const origin = new AFRAME.THREE.Vector3(); origin.setFromMatrixPosition(cam.matrixWorld);
+  const dir = new AFRAME.THREE.Vector3(0,0,-1).applyQuaternion(cam.quaternion).normalize();
+  const ray = new AFRAME.THREE.Raycaster(origin, dir, 0, range);
+  const enemyObjs = Array.from(enemiesRoot.children).map(n=>n.object3D);
+  const intersects = ray.intersectObjects(enemyObjs, true);
+  if(intersects.length){
+    // find closest parent entity
+    let hit = intersects[0].object; let ent = null;
+    while(hit && !ent){
+      if(hit.el && hit.el.classList && hit.el.classList.contains('enemy')) ent = hit.el;
+      hit = hit.parent;
+    }
+    if(ent){
+      // compute damage dependent on tool
+      let dmg = 6; // default fist
+      if(state.equipped === 'stone-axe') dmg = 18;
+      else if(state.equipped === 'wood-staff') dmg = 10;
+      // spells can add damage if available
+      const spark = state.spells.find(s=>s.id==='spark');
+      if(spark && spark.charges > 0 && state.mana >= spark.cost){
+        spark.charges--; state.mana = Math.max(0, state.mana - spark.cost); dmg += spark.dmg;
       }
-      takeDamage(dmg) {
-        this.hp -= dmg;
-        if (this.hp <= 0) {
-          this.hp = 0;
-          this.alive = false;
-          gainXP(25);
-        }
+      ent.__data.hp -= dmg;
+      ent.__data.aggro = true; // provoked
+      statusPulse('Hit enemy -' + Math.round(dmg));
+      // if dead
+      if(ent.__data.hp <= 0 && ent.__data.alive){
+        ent.__data.alive = false;
+        ent.setAttribute('opacity','0.6'); ent.setAttribute('color','#333');
+        // drop loot
+        if(Math.random() < 0.7) spawnCollectible(['stick','rock','mushroom'][Math.floor(Math.random()*3)], {x: ent.object3D.position.x + (Math.random()-0.5), z: ent.object3D.position.z + (Math.random()-0.5)});
+        addXP(25);
+        // remove after short time and respawn after 2 minutes
+        setTimeout(()=>{ if(ent.parentNode) ent.parentNode.removeChild(ent); }, 3000);
+        setTimeout(()=> spawnEnemySafe(), 120000);
+        updateEnemyCount();
       }
+      refreshUI();
+      return true;
     }
-    // Start with some enemies in the forest
-    let enemies = [
-      new Enemy("Forest Sprite", 180, 400),
-      new Enemy("Tiny Goblin", 350, 250),
-      new Enemy("Wisp", 540, 320)
-    ];
+  }
+  statusPulse('Missed');
+  return false;
+}
+document.addEventListener('mousedown', (e)=>{ if(e.button === 0) raycastAttack(); });
+document.addEventListener('keydown', e=>{ if(e.code === 'Space'){ e.preventDefault(); raycastAttack(); } });
 
-    // --- NPCs ---
-    const npcs = [
-      {
-        name: "Elder Willow",
-        x: 320, y: 150,
-        questText: "Welcome, young mage! The forest is restless. Defeat 1 Forest Sprite and return to me."
-      },
-      {
-        name: "Herbalist Fyn",
-        x: 600, y: 340,
-        questText: "Collect 1 Wisp Essence for my potions, please."
-      }
-    ];
-
-    function updateEnemiesList() {
-      document.getElementById('enemies-list').innerHTML = enemies.map(
-        e => e.alive ? `${e.name} (Lvl ${e.level}) - ${e.hp}/${e.maxHp}HP` : `<span style="color:#888">${e.name} (defeated)</span>`
-      ).join('<br>');
+/* -------------------------
+   Interact (E): pick up, pond, NPC talk
+   ------------------------- */
+function interactNear(){
+  const playerPos = document.getElementById('player').object3D.position;
+  // collectibles
+  for(const c of Array.from(collRoot.children)){
+    const pos = c.object3D.position;
+    if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) < 1.6){
+      state.inventory[c.__type] = (state.inventory[c.__type]||0)+1;
+      if(c.parentNode) c.parentNode.removeChild(c);
+      statusPulse('Picked up ' + c.__type); refreshUI(); return;
     }
-
-    // --- Dialogue ---
-    function showDialogue(npc, text) {
-      document.getElementById('dialogue-npc').textContent = npc;
-      document.getElementById('dialogue-text').textContent = text;
-      document.getElementById('dialogue-box').style.display = 'flex';
+  }
+  // ponds
+  for(const id of ['pond1','pond2']){
+    const p = document.getElementById(id); const pos = p.object3D.position;
+    if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) < 2.0){
+      state.inventory.water = (state.inventory.water||0) + 1; statusPulse('Filled water'); refreshUI(); return;
     }
-    function closeDialogue() {
-      document.getElementById('dialogue-box').style.display = 'none';
-    }
+  }
+  // NPC
+  const npcGroup = document.getElementById('npc-group'); const np = npcGroup.object3D.position;
+  if(Math.hypot(np.x-playerPos.x,np.z-playerPos.z) < 2.2){
+    // talk/quest logic
+    if(state.quest === 'Talk to the Forest Elder'){ state.quest = 'Collect 5 sticks for the Elder'; statusPulse('Quest started: Collect 5 sticks'); }
+    else if(state.quest === 'Collect 5 sticks for the Elder'){
+      if((state.inventory.stick||0) >= 5){
+        state.inventory.stick -= 5; addXP(60); state.quest = 'Complete! Elder teaches Fireball.'; if(!state.knownSpells.has('fireball')){ state.knownSpells.add('fireball'); state.spells.push({id:'fireball',name:'Fireball',charges:2,max:2,dmg:35,cost:15}); } statusPulse('Quest complete! Learned Fireball'); refreshUI(); }
+      else statusPulse('You need 5 sticks');
+    } else statusPulse('The Elder nods.');
+    refreshUI(); return;
+  }
+  statusPulse('Nothing to interact');
+}
+document.addEventListener('keydown', e=>{ if(e.key.toLowerCase() === 'e') interactNear(); });
 
-    // --- Hotbar interaction ---
-    document.querySelectorAll('.hotbar-slot').forEach((el, idx) => {
-      el.addEventListener('click', () => {
-        selectAbility(idx);
-      });
-    });
-    function selectAbility(idx) {
-      selectedAbility = idx;
-      document.querySelectorAll('.hotbar-slot').forEach((el, i) => {
-        if (i === idx) el.classList.add('active');
-        else el.classList.remove('active');
-      });
-    }
+/* -------------------------
+   XP / leveling
+   ------------------------- */
+function addXP(v){
+  state.xp += v;
+  while(state.xp >= state.xpMax){
+    state.xp -= state.xpMax; state.level++; state.xpMax = Math.floor(state.xpMax * 1.25);
+    state.hpMax += 8; state.staminaMax += 6; state.manaMax += 6;
+    state.hp = state.hpMax; state.stamina = state.staminaMax; state.mana = state.manaMax;
+    statusPulse('Level up!');
+  }
+  refreshUI();
+}
 
-    // --- Sandbox ("environmental world") ---
-    let sandboxElements = []; // {type, x, y}
-    let sandboxMode = "place"; // or "remove"
-    function setSandboxMode(m) { sandboxMode = m; }
-    document.getElementById("sandbox-element").addEventListener("change", (e)=>{
-      sandboxPlaceType = e.target.value;
-    });
-    let sandboxPlaceType = document.getElementById("sandbox-element").value;
+/* -------------------------
+   Damage / die / respawn
+   ------------------------- */
+function damagePlayer(amount){
+  if(state.hp <= 0) return;
+  state.hp = Math.max(0, state.hp - amount);
+  document.getElementById('damage-flash').style.opacity = 1; setTimeout(()=>document.getElementById('damage-flash').style.opacity = 0, 180);
+  refreshUI();
+  if(state.hp <= 0){ statusPulse('You died. Respawning...'); disableControls(); setTimeout(respawnPlayer, 4000); }
+}
+function disableControls(){ const cam = document.getElementById('camera'); cam.components['look-controls']?.pause(); cam.components['wasd-controls']?.pause(); }
+function respawnPlayer(){ const player = document.getElementById('player'); player.setAttribute('position','0 1.6 0'); state.hp = state.hpMax; state.stamina = state.staminaMax; state.mana = state.manaMax; state.hydration = 100; state.food = 100; document.getElementById('camera').components['look-controls']?.play(); document.getElementById('camera').components['wasd-controls']?.play(); statusPulse('You respawned'); refreshUI(); }
 
-    // Drawing sandbox elements
-    function drawSandboxElements() {
-      sandboxElements.forEach(el => {
-        switch(el.type) {
-          case "tree":
-            ctx.save();
-            ctx.translate(el.x, el.y);
-            ctx.fillStyle = "#284f20";
-            ctx.beginPath();
-            ctx.ellipse(0, 0, 28, 60, 0, 0, 2 * Math.PI);
-            ctx.fill();
-            ctx.fillStyle = "#3a5c3a";
-            ctx.beginPath();
-            ctx.ellipse(0, 0, 22, 45, 0, 0, 2 * Math.PI);
-            ctx.fill();
-            // trunk
-            ctx.fillStyle = "#7b5637";
-            ctx.fillRect(-5, 34, 10, 22);
-            ctx.restore();
-            break;
-          case "rock":
-            ctx.save();
-            ctx.translate(el.x, el.y);
-            ctx.fillStyle = "#bbb";
-            ctx.beginPath();
-            ctx.ellipse(0, 0, 18, 14, 0, 0, 2 * Math.PI);
-            ctx.fill();
-            ctx.restore();
-            break;
-          case "pond":
-            ctx.save();
-            ctx.translate(el.x, el.y);
-            ctx.fillStyle = "#4cdbff";
-            ctx.globalAlpha = 0.7;
-            ctx.beginPath();
-            ctx.ellipse(0, 0, 34, 18, 0, 0, 2 * Math.PI);
-            ctx.fill();
-            ctx.globalAlpha = 1.0;
-            ctx.strokeStyle = "#aafcff";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.ellipse(0, 0, 30, 14, 0, 0, 2 * Math.PI);
-            ctx.stroke();
-            ctx.restore();
-            break;
-          case "flower":
-            ctx.save();
-            ctx.translate(el.x, el.y);
-            for (let i = 0; i < 6; i++) {
-              ctx.save();
-              ctx.rotate((i * Math.PI) / 3);
-              ctx.fillStyle = "#ffb3e9";
-              ctx.beginPath();
-              ctx.ellipse(0, 8, 6, 10, 0, 0, 2 * Math.PI);
-              ctx.fill();
-              ctx.restore();
-            }
-            ctx.fillStyle = "#ffe066";
-            ctx.beginPath();
-            ctx.arc(0, 0, 6, 0, 2 * Math.PI);
-            ctx.fill();
-            ctx.restore();
-            break;
-          case "bush":
-            ctx.save();
-            ctx.translate(el.x, el.y);
-            ctx.fillStyle = "#2b6b40";
-            ctx.beginPath();
-            ctx.arc(0, 0, 22, 0, 2 * Math.PI);
-            ctx.arc(18, 5, 18, 0, 2 * Math.PI);
-            ctx.arc(-18, 5, 18, 0, 2 * Math.PI);
-            ctx.fill();
-            ctx.restore();
-            break;
-          case "mushroom":
-            ctx.save();
-            ctx.translate(el.x, el.y);
-            // cap
-            ctx.fillStyle = "#ff5e5e";
-            ctx.beginPath();
-            ctx.ellipse(0, 0, 10, 7, 0, Math.PI, 2 * Math.PI);
-            ctx.fill();
-            // stem
-            ctx.fillStyle = "#fffbe6";
-            ctx.fillRect(-3, 0, 6, 12);
-            ctx.restore();
-            break;
-        }
-      });
-    }
+/* -------------------------
+   Passive ticks (gentle)
+   ------------------------- */
+setInterval(()=>{
+  state.mana = Math.min(state.manaMax, state.mana + 0.3);
+  state.spells.forEach(s=>{ if(s.charges < s.max && Math.random() < 0.04) s.charges++; });
+  state.food = Math.max(0, state.food - 0.01);
+  state.hydration = Math.max(0, state.hydration - 0.01);
+  if(state.food <= 0 || state.hydration <= 0) state.hp = Math.max(0, state.hp - 0.03);
+  refreshUI();
+}, 1000);
 
-    // --- Game "Rendering" ---
-    const canvas = document.getElementById('game-canvas');
-    const ctx = canvas.getContext('2d');
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
+/* -------------------------
+   Prompt when near interactions
+   ------------------------- */
+function updatePrompt(){
+  const playerPos = document.getElementById('player').object3D.position;
+  let show = false;
+  for(const c of Array.from(collRoot.children)){ const pos = c.object3D.position; if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) < 1.6){ show = true; break; } }
+  if(!show) for(const id of ['pond1','pond2']){ const p = document.getElementById(id); if(Math.hypot(p.object3D.position.x-playerPos.x,p.object3D.position.z-playerPos.z) < 2){ show = true; break; } }
+  if(!show){ const npc = document.getElementById('npc-group'); if(Math.hypot(npc.object3D.position.x-playerPos.x,npc.object3D.position.z-playerPos.z) < 2.2) show = true; }
+  document.getElementById('prompt').style.display = show ? 'block' : 'none';
+}
+setInterval(updatePrompt, 250);
 
-    function drawForestBG() {
-      // Simple painterly forest
-      ctx.fillStyle = "#274027";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+/* -------------------------
+   Utility & initial render
+   ------------------------- */
+function statusPulse(text){ statusEl.textContent = text; setTimeout(()=> statusEl.textContent = 'Idle', 2200); }
+function refreshUI(){ requestAnimationFrame(()=>{ hpBar.style.width = (state.hp/state.hpMax*100)+'%'; stamBar.style.width = (state.stamina/state.staminaMax*100)+'%'; manaBar.style.width = (state.mana/state.manaMax*100)+'%'; hpText.textContent = `${Math.round(state.hp)}/${state.hpMax}`; stamText.textContent = `${Math.round(state.stamina)}/${state.staminaMax}`; manaText.textContent = `${Math.round(state.mana)}/${state.manaMax}`; hydrationEl.textContent = `${Math.round(state.hydration)}%`; foodEl.textContent = `${Math.round(state.food)}%`; xpEl.textContent = state.xp; xpMaxEl.textContent = state.xpMax; lvlEl.textContent = state.level; questEl.textContent = state.quest; equippedEl.textContent = state.equipped||'None'; xp_small.textContent = state.xp; renderInventory(); renderCrafting(); updateEnemyCount(); }); }
 
-      // Large forest background trees
-      for (let i = 0; i < 12; i++) {
-        let x = (canvas.width/12) * i + 30 * Math.sin(i*2);
-        ctx.fillStyle = "#284f20";
-        ctx.beginPath();
-        ctx.ellipse(x, 250 + 60*Math.sin(i), 50+18*Math.cos(i), 120, 0, 0, 2*Math.PI);
-        ctx.fill();
-        ctx.fillStyle = "#3a5c3a";
-        ctx.beginPath();
-        ctx.ellipse(x, 250 + 60*Math.sin(i), 38+12*Math.cos(i), 90, 0, 0, 2*Math.PI);
-        ctx.fill();
-      }
-      // Bushes
-      for (let i = 0; i < 20; i++) {
-        let x = (canvas.width/20) * i + 10 * Math.sin(i*1.8);
-        let y = 420 + 12 * Math.cos(i*1.3);
-        ctx.fillStyle = "#2b6b40";
-        ctx.beginPath();
-        ctx.arc(x, y, 28 + 6*Math.sin(i), 0, 2*Math.PI);
-        ctx.fill();
-      }
+/* Expose some for debugging */
+window.gstate = state;
+window.spawnCollectible = spawnCollectible;
+window.addXP = addXP;
 
-      // Sparkles for magic
-      for (let i = 0; i < 50; i++) {
-        let x = Math.random() * canvas.width;
-        let y = Math.random() * 500;
-        ctx.fillStyle = `rgba(110,255,177,${0.06+Math.random()*0.08})`;
-        ctx.beginPath();
-        ctx.arc(x, y, 1.7+Math.random()*1.1, 0, 2*Math.PI);
-        ctx.fill();
-      }
-    }
+/* Initial UI */
+renderInventory(); renderCrafting(); refreshUI();
 
-    function drawEntities() {
-      // Enemies
-      enemies.forEach(e => {
-        if (!e.alive) return;
-        ctx.save();
-        ctx.translate(e.x, e.y);
-        // Body
-        ctx.beginPath();
-        ctx.arc(0, 0, 20, 0, 2*Math.PI);
-        ctx.fillStyle = "#c2f7ff";
-        ctx.shadowColor = "#8ff";
-        ctx.shadowBlur = 25;
-        ctx.fill();
-
-        // Eyes
-        ctx.shadowBlur = 0;
-        ctx.fillStyle = "#223";
-        ctx.beginPath();
-        ctx.arc(-7, -2, 2, 0, 2*Math.PI);
-        ctx.arc(7, -2, 2, 0, 2*Math.PI);
-        ctx.fill();
-
-        // Name
-        ctx.font = "bold 15px Segoe UI";
-        ctx.fillStyle = "#fff";
-        ctx.shadowColor = "#333";
-        ctx.shadowBlur = 2;
-        ctx.textAlign = "center";
-        ctx.fillText(e.name, 0, -28);
-        ctx.restore();
-
-        // HP Bar
-        ctx.save();
-        ctx.translate(e.x-18, e.y+24);
-        ctx.fillStyle = "#444";
-        ctx.fillRect(0, 0, 36, 6);
-        ctx.fillStyle = "#6fffb1";
-        ctx.fillRect(0, 0, 36*(e.hp/e.maxHp), 6);
-        ctx.restore();
-      });
-
-      // NPCs
-      npcs.forEach(n => {
-        ctx.save();
-        ctx.translate(n.x, n.y);
-        ctx.beginPath();
-        ctx.arc(0, 0, 18, 0, 2 * Math.PI);
-        ctx.fillStyle = "#ffe066";
-        ctx.shadowColor = "#fff6a0";
-        ctx.shadowBlur = 18;
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.font = "bold 14px Segoe UI";
-        ctx.fillStyle = "#222";
-        ctx.textAlign = "center";
-        ctx.fillText(n.name, 0, -26);
-        ctx.restore();
-      });
-    }
-
-    // --- Input / Interactions ---
-    // Simulate "clicking" NPCs or enemies or sandbox elements
-    canvas.addEventListener('mousedown', function(evt) {
-      const rect = canvas.getBoundingClientRect();
-      const mouseX = evt.clientX - rect.left;
-      const mouseY = evt.clientY - rect.top;
-
-      // Sandbox interaction (priority)
-      if (sandboxMode === "place") {
-        // Don't place over NPC or enemy
-        let onEntity = false;
-        for (let n of npcs) {
-          let dx = mouseX-n.x, dy = mouseY-n.y;
-          if (dx*dx + dy*dy < 32*32) onEntity = true;
-        }
-        for (let e of enemies) {
-          let dx = mouseX-e.x, dy = mouseY-e.y;
-          if (dx*dx + dy*dy < 28*28) onEntity = true;
-        }
-        if (!onEntity) {
-          sandboxElements.push({type: sandboxPlaceType, x: mouseX, y: mouseY});
-        }
-        return;
-      } else if (sandboxMode === "remove") {
-        // Remove closest sandbox element within radius
-        let idx = sandboxElements.findIndex(el => {
-          let dx = mouseX-el.x, dy = mouseY-el.y;
-          return (dx*dx + dy*dy < 30*30);
-        });
-        if (idx !== -1) sandboxElements.splice(idx, 1);
-        return;
-      }
-
-      // Check if clicked on NPC
-      for (let n of npcs) {
-        let dx = mouseX-n.x, dy = mouseY-n.y;
-        if (dx*dx + dy*dy < 24*24) {
-          showDialogue(n.name, n.questText);
-          return;
-        }
-      }
-
-      // Check if clicked on alive enemy
-      for (let e of enemies) {
-        if (!e.alive) continue;
-        let dx = mouseX-e.x, dy = mouseY-e.y;
-        if (dx*dx + dy*dy < 22*22) {
-          // Attack with selected ability
-          let dmg = 7 + player.magic + (selectedAbility === 3 ? 5 : 0); // Fireball does more
-          e.takeDamage(dmg);
-          showDialogue("Battle", `You hit ${e.name} for ${dmg} damage!`);
-          updateEnemiesList();
-          updateStatsDisplay();
-          return;
-        }
-      }
-    });
-
-    // Keyboard: 1-4 for hotbar, Q for close dialogue, S for sandbox place, R for sandbox remove
-    window.addEventListener('keydown', function(e){
-      if (e.key >= '1' && e.key <= '4') selectAbility(Number(e.key)-1);
-      if (e.key === 'q') closeDialogue();
-      if (e.key === 's') setSandboxMode('place');
-      if (e.key === 'r') setSandboxMode('remove');
-    });
-
-    // --- Main Loop ---
-    function mainLoop() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      drawForestBG();
-      drawSandboxElements();
-      drawEntities();
-      requestAnimationFrame(mainLoop);
-    }
-    mainLoop();
-
-    // --- Initial UI update ---
-    updateStatsDisplay();
-    updateEnemiesList();
-
-    // --- Responsive UI on load ---
-    window.addEventListener('load', resizeCanvas);
-
-    // --- Touch/VR note ---
-    // This is a desktop/web simulation of a VR adventure.
-    // For true VR: port to A-Frame, three.js, or Unity WebGL/XR.
-  </script>
+console.info('Game loaded. Controls: WASD + mouse to look. Click to attack or Space. E to interact. Click scene to lock pointer.');
+</script>
 </body>
 </html>
+
