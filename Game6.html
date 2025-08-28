@@ -3,124 +3,99 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Car Racing Game</title>
+  <title>Drifting Racing Game</title>
   <style>
     body {
       margin: 0;
       overflow: hidden;
-      font-family: Arial, sans-serif;
     }
-
     canvas {
       display: block;
-      background: linear-gradient(#444, #222);
-    }
-
-    #score {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      color: white;
-      font-size: 20px;
-      z-index: 10;
+      background: #333;
     }
   </style>
 </head>
 <body>
-  <div id="score">Score: 0</div>
   <canvas id="gameCanvas"></canvas>
-
   <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    let car = {
-      x: canvas.width / 2 - 25,
+    // Car properties
+    const car = {
+      x: canvas.width / 2,
       y: canvas.height - 100,
       width: 50,
       height: 100,
-      color: 'red',
-      speed: 5
+      speed: 0,
+      angle: 0,
+      maxSpeed: 5,
+      friction: 0.05,
+      turnSpeed: 3
     };
 
-    let obstacles = [];
-    let score = 0;
-    let gameOver = false;
+    // Key controls
+    const keys = {
+      ArrowUp: false,
+      ArrowDown: false,
+      ArrowLeft: false,
+      ArrowRight: false
+    };
+
+    // Event listeners for key presses
+    window.addEventListener('keydown', (e) => {
+      if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+    });
+    window.addEventListener('keyup', (e) => {
+      if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
+    });
+
+    function updateCar() {
+      // Accelerate and decelerate
+      if (keys.ArrowUp) car.speed = Math.min(car.speed + 0.1, car.maxSpeed);
+      if (keys.ArrowDown) car.speed = Math.max(car.speed - 0.1, -car.maxSpeed / 2);
+
+      // Apply friction
+      if (!keys.ArrowUp && !keys.ArrowDown) {
+        car.speed *= 1 - car.friction;
+        if (Math.abs(car.speed) < 0.05) car.speed = 0;
+      }
+
+      // Turning
+      if (car.speed !== 0) {
+        const direction = car.speed > 0 ? 1 : -1;
+        if (keys.ArrowLeft) car.angle -= car.turnSpeed * direction;
+        if (keys.ArrowRight) car.angle += car.turnSpeed * direction;
+      }
+
+      // Update position
+      car.x += Math.sin(car.angle * Math.PI / 180) * car.speed;
+      car.y -= Math.cos(car.angle * Math.PI / 180) * car.speed;
+
+      // Keep car within bounds
+      if (car.x < 0) car.x = 0;
+      if (car.x + car.width > canvas.width) car.x = canvas.width - car.width;
+      if (car.y < 0) car.y = 0;
+      if (car.y + car.height > canvas.height) car.y = canvas.height - car.height;
+    }
 
     function drawCar() {
-      ctx.fillStyle = car.color;
-      ctx.fillRect(car.x, car.y, car.width, car.height);
-    }
-
-    function drawObstacles() {
-      obstacles.forEach(obstacle => {
-        ctx.fillStyle = 'blue';
-        ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
-      });
-    }
-
-    function updateObstacles() {
-      obstacles.forEach(obstacle => {
-        obstacle.y += 5;
-      });
-
-      obstacles = obstacles.filter(obstacle => obstacle.y < canvas.height);
-
-      if (Math.random() < 0.02) {
-        obstacles.push({
-          x: Math.random() * (canvas.width - 50),
-          y: -100,
-          width: 50,
-          height: 100
-        });
-      }
-    }
-
-    function checkCollision() {
-      obstacles.forEach(obstacle => {
-        if (
-          car.x < obstacle.x + obstacle.width &&
-          car.x + car.width > obstacle.x &&
-          car.y < obstacle.y + obstacle.height &&
-          car.y + car.height > obstacle.y
-        ) {
-          gameOver = true;
-        }
-      });
-    }
-
-    function updateScore() {
-      score++;
-      document.getElementById('score').innerText = `Score: ${score}`;
+      ctx.save();
+      ctx.translate(car.x + car.width / 2, car.y + car.height / 2);
+      ctx.rotate(car.angle * Math.PI / 180);
+      ctx.fillStyle = 'red';
+      ctx.fillRect(-car.width / 2, -car.height / 2, car.width, car.height);
+      ctx.restore();
     }
 
     function gameLoop() {
-      if (gameOver) {
-        alert(`Game Over! Your score: ${score}`);
-        document.location.reload();
-        return;
-      }
-
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+      updateCar();
       drawCar();
-      drawObstacles();
-      updateObstacles();
-      checkCollision();
-      updateScore();
-
       requestAnimationFrame(gameLoop);
     }
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowLeft' && car.x > 0) {
-        car.x -= car.speed;
-      } else if (e.key === 'ArrowRight' && car.x < canvas.width - car.width) {
-        car.x += car.speed;
-      }
-    });
 
     gameLoop();
   </script>
