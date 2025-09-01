@@ -1,103 +1,131 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Drifting Racing Game</title>
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-    }
-    canvas {
-      display: block;
-      background: #333;
-    }
-  </style>
+<title>Snake Game</title>
+<style>
+canvas {
+  background-color: black;
+  display: block;
+  margin: 0 auto;
+}
+</style>
 </head>
 <body>
-  <canvas id="gameCanvas"></canvas>
-  <script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
 
-    // Car properties
-    const car = {
-      x: canvas.width / 2,
-      y: canvas.height - 100,
-      width: 50,
-      height: 100,
-      speed: 0,
-      angle: 0,
-      maxSpeed: 5,
-      friction: 0.05,
-      turnSpeed: 3
-    };
+<canvas id="myCanvas" width="400" height="400"></canvas>
 
-    // Key controls
-    const keys = {
-      ArrowUp: false,
-      ArrowDown: false,
-      ArrowLeft: false,
-      ArrowRight: false
-    };
+<script>
+const canvas = document.getElementById("myCanvas");
+const ctx = canvas.getContext("2d");
 
-    // Event listeners for key presses
-    window.addEventListener('keydown', (e) => {
-      if (keys.hasOwnProperty(e.key)) keys[e.key] = true;
+// Game constants
+const gridSize = 20;
+const gridWidth = canvas.width / gridSize;
+const gridHeight = canvas.height / gridSize;
+
+let snake = [{ x: 10, y: 10 }];
+let food = generateFood();
+let dx = 1;
+let dy = 0;
+let score = 0;
+
+function generateFood() {
+  do {
+    foodX = Math.floor(Math.random() * gridWidth);
+    foodY = Math.floor(Math.random() * gridHeight);
+  } while (isFoodOnSnake(foodX, foodY));
+  return { x: foodX, y: foodY };
+}
+
+function isFoodOnSnake(foodX, foodY) {
+  return snake.some(part => part.x === foodX && part.y === foodY);
+}
+
+function drawSnake() {
+    ctx.fillStyle = 'lime';
+    snake.forEach(part => {
+        ctx.fillRect(part.x * gridSize, part.y * gridSize, gridSize, gridSize);
     });
-    window.addEventListener('keyup', (e) => {
-      if (keys.hasOwnProperty(e.key)) keys[e.key] = false;
-    });
+}
+function drawFood(){
+    ctx.fillStyle = 'red';
+  ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize, gridSize);
+}
 
-    function updateCar() {
-      // Accelerate and decelerate
-      if (keys.ArrowUp) car.speed = Math.min(car.speed + 0.1, car.maxSpeed);
-      if (keys.ArrowDown) car.speed = Math.max(car.speed - 0.1, -car.maxSpeed / 2);
 
-      // Apply friction
-      if (!keys.ArrowUp && !keys.ArrowDown) {
-        car.speed *= 1 - car.friction;
-        if (Math.abs(car.speed) < 0.05) car.speed = 0;
+function update() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawSnake()
+    drawFood()
+    // Move snake
+    const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+    snake.unshift(head);
+
+    // Check for collisions
+
+
+    if (head.x === food.x && head.y === food.y) {
+      score++;
+      food = generateFood();
+    } else {
+      snake.pop();
+    }
+
+
+  if(snake[0].x<0 || snake[0].x >= gridWidth || snake[0].y < 0 || snake[0].y >= gridHeight ||
+      checkCollision(head)
+     ){
+        alert(`Game Over! Your score: ${score}`);
+        // Reset game
+        snake = [{ x: 10, y: 10 }];
+        food = generateFood();
+        dx = 1;
+        dy = 0;
+        score = 0;
+    }
+
+}
+let interval = null
+function start(){
+   interval= setInterval(update, 100);
+    }
+
+
+function checkCollision(head){
+   let collision = false;
+  
+  for(i=1;i<snake.length;i++){
+      if(head.x === snake[i].x && head.y === snake[i].y){
+          collision = true;
       }
+  
+  }
+  return collision;
+}
 
-      // Turning
-      if (car.speed !== 0) {
-        const direction = car.speed > 0 ? 1 : -1;
-        if (keys.ArrowLeft) car.angle -= car.turnSpeed * direction;
-        if (keys.ArrowRight) car.angle += car.turnSpeed * direction;
-      }
+document.addEventListener('keydown', function (event) {
+  const keyPressed = event.key;
 
-      // Update position
-      car.x += Math.sin(car.angle * Math.PI / 180) * car.speed;
-      car.y -= Math.cos(car.angle * Math.PI / 180) * car.speed;
+  if (keyPressed === 'ArrowUp' && dy !== 1) {
+    dx = 0;
+    dy = -1;
+  } else if (keyPressed === 'ArrowDown' && dy !== -1) {
+    dx = 0;
+    dy = 1;
+  } else if (keyPressed === 'ArrowLeft' && dx !== 1) {
+    dx = -1;
+    dy = 0;
+  } else if (keyPressed === 'ArrowRight' && dx !== -1) {
+    dx = 1;
+    dy = 0;
+  }
 
-      // Keep car within bounds
-      if (car.x < 0) car.x = 0;
-      if (car.x + car.width > canvas.width) car.x = canvas.width - car.width;
-      if (car.y < 0) car.y = 0;
-      if (car.y + car.height > canvas.height) car.y = canvas.height - car.height;
-    }
+});
 
-    function drawCar() {
-      ctx.save();
-      ctx.translate(car.x + car.width / 2, car.y + car.height / 2);
-      ctx.rotate(car.angle * Math.PI / 180);
-      ctx.fillStyle = 'red';
-      ctx.fillRect(-car.width / 2, -car.height / 2, car.width, car.height);
-      ctx.restore();
-    }
+start();
 
-    function gameLoop() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      updateCar();
-      drawCar();
-      requestAnimationFrame(gameLoop);
-    }
 
-    gameLoop();
-  </script>
+</script>
+
 </body>
 </html>
