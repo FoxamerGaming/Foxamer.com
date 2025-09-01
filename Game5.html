@@ -1,3 +1,92 @@
+/* -------------------------
+    NPC Entity and Interaction
+   ------------------------- */
+   // This is the HTML part that creates the NPC and its label
+   /*
+   <a-entity id="npc-group" position="0 0 -4">
+     <a-box id="npc" color="#FFD700" position="0 1 0" depth="0.6" height="2" width="1.2" class="clickable" shadow="cast:true"></a-box>
+     <a-text value="Forest Elder (E to talk)" position="-1.6 2.6 0" color="#fff" align="center"></a-text>
+   </a-entity>
+   */
+
+   // This function is triggered when you press 'E' near an interactable object
+   function interactNear(){
+     const playerPos = document.getElementById('player').object3D.position;
+     const npcGroup = document.getElementById('npc-group');
+     const np = npcGroup.object3D.position; // NPC's position
+
+     // Check if the player is close enough to the NPC
+     if(Math.hypot(np.x - playerPos.x, np.z - playerPos.z) < 2.2){
+       // Quest logic for the NPC
+       if(state.quest === 'Talk to the Forest Elder'){
+         state.quest = 'Collect 5 sticks for the Elder';
+         statusPulse('Quest started: Collect 5 sticks');
+       }
+       else if(state.quest === 'Collect 5 sticks for the Elder'){
+         if((state.inventory.stick || 0) >= 5){
+           state.inventory.stick -= 5;
+           addXP(60); // Adds XP for quest completion
+           state.quest = 'Complete! Elder teaches Fireball.';
+           // Learn the Fireball spell
+           if(!state.knownSpells.has('fireball')){
+             state.knownSpells.add('fireball');
+             state.spells.push({id:'fireball', name:'Fireball', charges:2, max:2, dmg:35, cost:15});
+             statusPulse('Quest complete! Learned Fireball');
+           }
+           refreshUI();
+         } else {
+           statusPulse('You need 5 sticks');
+         }
+       } else {
+         statusPulse('The Elder nods.'); // Generic response if no active quest stage
+       }
+       refreshUI(); // Refresh UI to show updated quest status
+       return; // Stop further checks if interaction occurred
+     }
+     // Other interaction checks (collectibles, ponds) would go here...
+
+     statusPulse('Nothing to interact');
+   }
+
+   // This handles the 'E' key press to trigger the interaction
+   document.addEventListener('keydown', e => {
+     if(e.key.toLowerCase() === 'e') {
+       interactNear();
+     }
+   });
+
+   // This function updates the visibility of the interaction prompt
+   function updatePrompt(){
+     const playerPos = document.getElementById('player').object3D.position;
+     let show = false;
+     const npc = document.getElementById('npc-group');
+
+     // Check if player is near the NPC
+     if(Math.hypot(npc.object3D.position.x - playerPos.x, npc.object3D.position.z - playerPos.z) < 2.2) {
+       show = true;
+     }
+
+     document.getElementById('prompt').style.display = show ? 'block' : 'none';
+   }
+
+   // Periodically update the prompt to show/hide as the player moves
+   setInterval(updatePrompt, 250);
+
+   // Helper to display short messages
+   function statusPulse(text){
+     statusEl.textContent = text;
+     setTimeout(() => statusEl.textContent = 'Idle', 2200);
+   }
+This code includes the NPC entity definition (commented out but present in the original HTML), the interactNear function that handles the quest progression, the key listener for the 'E' key, and the updatePrompt function to display the interaction hint.
+
+Does this organized snippet help you visualize the NPC interaction part of the code more clearly?
+
+
+and relace your code into my code pls
+Certainly! I've integrated the NPC interaction code directly into your provided HTML. You can now copy the entire code block below.
+
+I've ensured the existing A-Frame setup and your UI elements remain intact. The new JavaScript code for the NPC, quests, and interaction prompt is now seamlessly included.
+
 <!doctype html>
 <html lang="en">
 <head>
@@ -58,563 +147,613 @@
       <div id="quest">Talk to the Forest Elder</div>
     </div>
   </div>
-
-  <div id="hotbar" role="toolbar" aria-label="Hotbar">
-    <div class="hotbar-item" data-item="" title="Slot 1"><div class="hotbar-key">1</div></div>
-    <div class="hotbar-item" data-item="" title="Slot 2"><div class="hotbar-key">2</div></div>
-    <div class="hotbar-item" data-item="" title="Slot 3"><div class="hotbar-key">3</div></div>
-    <div id="more-btn" title="Open Backpack">⋯</div>
-  </div>
-
-  <div id="backpack">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-weight:800">Backpack</div>
-      <div><button id="close-bp">Close</button></div>
-    </div>
-    <div style="display:flex;gap:12px;height:calc(100% - 44px)">
-      <div class="inv-grid" id="inv-grid" style="flex:2"></div>
-      <div style="flex:1;display:flex;flex-direction:column;gap:8px">
-        <div style="background:rgba(255,255,255,0.02);padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03)">
-          <div style="font-weight:700;margin-bottom:6px">Crafting</div>
-          <div id="craft-list"></div>
-        </div>
-        <div style="background:rgba(255,255,255,0.02);padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03)">
-          <div id="desc">Select a recipe</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="upgrades">
-    <div style="font-weight:700;margin-bottom:6px">Upgrade States (XP)</div>
-    <div style="display:flex;gap:6px">
-      <button id="up-hp">+HP (50 XP)</button>
-      <button id="up-stam">+Stam (30 XP)</button>
-      <button id="up-mana">+Mana (30 XP)</button>
-    </div>
-    <div class="muted" style="margin-top:6px">XP: <span id="xp_small">0</span></div>
-  </div>
-
-  <div id="state">
-    <div><strong>Equipped:</strong> <span id="equipped">None</span></div>
-    <div><strong>Status:</strong> <span id="status">Idle</span></div>
-    <div><strong>Hydration:</strong> <span id="hydration">100%</span></div>
-    <div><strong>Food:</strong> <span id="food">100%</span></div>
-    <div><strong>Enemies Nearby:</strong> <span id="enemyCount">0</span></div>
-  </div>
-
-  <div id="damage-flash"></div>
-  <div id="prompt">Press E to interact</div>
+   <div id="hotbar" role="toolbar" aria-label="Hotbar">
+     <div class="hotbar-item" data-item="" title="Slot 1"><div class="hotbar-key">1</div></div>
+     <div class="hotbar-item" data-item="" title="Slot 2"><div class="hotbar-key">2</div></div>
+     <div class="hotbar-item" data-item="" title="Slot 3"><div class="hotbar-key">3</div></div>
+     <div id="more-btn" title="Open Backpack">⋯</div>
+   </div>
+   <div id="backpack">
+     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+       <div style="font-weight:800">Backpack</div>
+       <div><button id="close-bp">Close</button></div>
+     </div>
+     <div style="display:flex;gap:12px;height:calc(100% - 44px)">
+       <div class="inv-grid" id="inv-grid" style="flex:2"></div>
+       <div style="flex:1;display:flex;flex-direction:column;gap:8px">
+         <div style="background:rgba(255,255,255,0.02);padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03)">
+           <div style="font-weight:700;margin-bottom:6px">Crafting</div>
+           <div id="craft-list"></div>
+         </div>
+         <div style="background:rgba(255,255,255,0.02);padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03)">
+           <div id="desc">Select a recipe</div>
+         </div>
+       </div>
+     </div>
+   </div>
+   <div id="upgrades">
+     <div style="font-weight:700;margin-bottom:6px">Upgrade States (XP)</div>
+     <div style="display:flex;gap:6px">
+       <button id="up-hp">+HP (50 XP)</button>
+       <button id="up-stam">+Stam (30 XP)</button>
+       <button id="up-mana">+Mana (30 XP)</button>
+     </div>
+     <div class="muted" style="margin-top:6px">XP: <span id="xp_small">0</span></div>
+   </div>
+   <div id="state">
+     <div><strong>Equipped:</strong> <span id="equipped">None</span></div>
+     <div><strong>Status:</strong> <span id="status">Idle</span></div>
+     <div><strong>Hydration:</strong> <span id="hydration">100%</span></div>
+     <div><strong>Food:</strong> <span id="food">100%</span></div>
+     <div><strong>Enemies Nearby:</strong> <span id="enemyCount">0</span></div>
+   </div>
+   <div id="damage-flash"></div>
+   <div id="prompt">Press E to interact</div>
 </div>
-
 <!-- A-Frame Scene -->
 <a-scene renderer="antialias:true; colorManagement:true" shadow="type:pcfsoft">
-  <a-assets>
-    <img id="grassTex" src="https://tse3.mm.bing.net/th/id/OIP.WrLUxhdq7EjOQH7FRfHYDAHaHa?r=0&rs=1&pid=ImgDetMain&o=7&rm=3" crossorigin="anonymous">
-    <img id="skyTex" src="https://tse2.mm.bing.net/th/id/OIP.u-OIlMIpaxeWsgQ-VU_newHaE6?r=0&rs=1&pid=ImgDetMain&o=7&rm=3" crossorigin="anonymous">
-    <img id="bark" src="https://images.unsplash.com/photo-1578926375605-eaf7559b1458?q=80&w=1200&auto=format&fit=crop" crossorigin="anonymous">
-  </a-assets>
-
-  <a-entity light="type:ambient; color:#bbb; intensity:0.7"></a-entity>
-  <a-entity light="type:directional; intensity:1" position="5 12 -3" rotation="-45 30 0" shadow="cast:true"></a-entity>
-
-  <a-plane id="ground" src="#grassTex" rotation="-90 0 0" width="160" height="160" material="repeat: 40 40; roughness: 1" shadow="receive:true"></a-plane>
-  <a-sky src="#skyTex"></a-sky>
-
-  <!-- Castle -->
-  <a-entity id="castle" position="0 0 -42">
-    <a-box color="#444" width="20" height="12" depth="20" position="0 6 0" shadow="cast:true"></a-box>
-    <a-text value="Dark Evil Castle" color="#fff" position="-4 14 -2" scale="3 3 3"></a-text>
-  </a-entity>
-
-  <!-- NPC group -->
-  <a-entity id="npc-group" position="0 0 -4">
-    <a-box id="npc" color="#FFD700" position="0 1 0" depth="0.6" height="2" width="1.2" class="clickable" shadow="cast:true"></a-box>
-    <a-text value="Forest Elder (E to talk)" position="-1.6 2.6 0" color="#fff" align="center"></a-text>
-  </a-entity>
-
-  <!-- containers -->
-  <a-entity id="trees"></a-entity>
-  <a-entity id="boulders"></a-entity>
-  <a-entity id="collectibles"></a-entity>
-  <a-entity id="enemies"></a-entity>
-
-  <!-- ponds -->
-  <a-circle id="pond1" radius="1.2" color="#2aa3ff" position="-3 0.01 -3" rotation="-90 0 0" opacity="0.9" class="clickable"></a-circle>
-  <a-circle id="pond2" radius="1.4" color="#2aa3ff" position="4 0.01 -6" rotation="-90 0 0" opacity="0.9" class="clickable"></a-circle>
-
-  <!-- player rig -->
-  <a-entity id="player" position="0 1.6 0">
-    <a-entity id="cameraRig" position="0 0 0">
-      <a-entity camera id="camera" look-controls wasd-controls position="0 0 0"></a-entity>
-    </a-entity>
-  </a-entity>
+   <a-assets>
+     <img id="grassTex" src="https://tse3.mm.bing.net/th/id/OIP.WrLUxhdq7EjOQH7FRfHYDAHaHa?r=0&rs=1&pid=ImgDetMain&o=7&rm=3" crossorigin="anonymous">
+     <img id="skyTex" src="https://tse2.mm.bing.net/th/id/OIP.u-OIlMIpaxeWsgQ-VU_newHaE6?r=0&rs=1&pid=ImgDetMain&o=7&rm=3" crossorigin="anonymous">
+     <img id="bark" src="https://images.unsplash.com/photo-1578926375605-eaf7559b1458?q=80&w=1200&auto=format&fit=crop" crossorigin="anonymous">
+   </a-assets>
+   <a-entity light="type:ambient; color:#bbb; intensity:0.7"></a-entity>
+   <a-entity light="type:directional; intensity:1" position="5 12 -3" rotation="-45 30 0" shadow="cast:true"></a-entity>
+   <a-plane id="ground" src="#grassTex" rotation="-90 0 0" width="160" height="160" material="repeat: 40 40; roughness: 1" shadow="receive:true"></a-plane>
+   <a-sky src="#skyTex"></a-sky>
+   <!-- Castle -->
+   <a-entity id="castle" position="0 0 -42">
+     <a-box color="#444" width="20" height="12" depth="20" position="0 6 0" shadow="cast:true"></a-box>
+     <a-text value="Dark Evil Castle" color="#fff" position="-4 14 -2" scale="3 3 3"></a-text>
+   </a-entity>
+   <!-- NPC group -->
+   <a-entity id="npc-group" position="0 0 -4">
+     <a-box id="npc" color="#FFD700" position="0 1 0" depth="0.6" height="2" width="1.2" class="clickable" shadow="cast:true"></a-box>
+     <a-text value="Forest Elder (E to talk)" position="-1.6 2.6 0" color="#fff" align="center"></a-text>
+   </a-entity>
+   <!-- containers -->
+   <a-entity id="trees"></a-entity>
+   <a-entity id="boulders"></a-entity>
+   <a-entity id="collectibles"></a-entity>
+   <a-entity id="enemies"></a-entity>
+   <!-- ponds -->
+   <a-circle id="pond1" radius="1.2" color="#2aa3ff" position="-3 0.01 -3" rotation="-90 0 0" opacity="0.9" class="clickable"></a-circle>
+   <a-circle id="pond2" radius="1.4" color="#2aa3ff" position="4 0.01 -6" rotation="-90 0 0" opacity="0.9" class="clickable"></a-circle>
+   <!-- player rig -->
+   <a-entity id="player" position="0 1.6 0">
+     <a-entity id="cameraRig" position="0 0 0">
+       <a-entity camera id="camera" look-controls wasd-controls position="0 0 0"></a-entity>
+     </a-entity>
+   </a-entity>
 </a-scene>
-
 <script>
-/* -------------------------
-   Game State & Config
+ /* -------------------------
+    Game State & Config
    ------------------------- */
-const state = {
-  hp: 100, hpMax: 100,
-  stamina: 100, staminaMax: 100,
-  mana: 60, manaMax: 60,
-  hydration: 100, food: 100,
-  xp: 0, xpMax: 100, level: 1,
-  equipped: '', 
-  // start empty - must craft
-  spells: [{id:'spark',name:'Spark',charges:3,max:3,dmg:15,cost:5}],
-  knownSpells: new Set(['spark']),
-  quest: 'Talk to the Forest Elder',
-  inventory: { stick:0, rock:0, mushroom:0, potion:0, water:0, 'wood-staff':0, 'stone-axe':0 }
-};
+ const state = {
+   hp: 100, hpMax: 100,
+   stamina: 100, staminaMax: 100,
+   mana: 60, manaMax: 60,
+   hydration: 100, food: 100,
+   xp: 0, xpMax: 100, level: 1,
+   equipped: '',
+   // start empty - must craft
+   spells: [{id:'spark',name:'Spark',charges:3,max:3,dmg:15,cost:5}],
+   knownSpells: new Set(['spark']),
+   quest: 'Talk to the Forest Elder', // Initial quest
+   inventory: { stick:0, rock:0, mushroom:0, potion:0, water:0, 'wood-staff':0, 'stone-axe':0 }
+ };
 
-const recipes = [
-  {id:'stone-axe', name:'Stone Axe', need:{stick:2,rock:1}, desc:'A crafted axe for chopping and stronger melee.'},
-  {id:'wood-staff', name:'Wood Staff', need:{stick:3}, desc:'Basic staff — improves spell damage.'},
-  {id:'potion', name:'Healing Potion', need:{mushroom:2,water:1}, desc:'Restores 40 HP.'},
-  {id:'fireball', name:'Spell: Fireball', need:{mushroom:1,stick:1}, desc:'Unlocks Fireball spell.'}
-];
+ const recipes = [
+   {id:'stone-axe', name:'Stone Axe', need:{stick:2,rock:1}, desc:'A crafted axe for chopping and stronger melee.'},
+   {id:'wood-staff', name:'Wood Staff', need:{stick:3}, desc:'Basic staff — improves spell damage.'},
+   {id:'potion', name:'Healing Potion', need:{mushroom:2,water:1}, desc:'Restores 40 HP.'},
+   {id:'fireball', name:'Spell: Fireball', need:{mushroom:1,stick:1}, desc:'Unlocks Fireball spell.'}
+ ];
 
-const MAX_ENEMIES = 22;
-const enemiesRoot = document.getElementById('enemies');
-const treesRoot = document.getElementById('trees');
-const bouldersRoot = document.getElementById('boulders');
-const collRoot = document.getElementById('collectibles');
+ const MAX_ENEMIES = 22;
+ const enemiesRoot = document.getElementById('enemies');
+ const treesRoot = document.getElementById('trees');
+ const bouldersRoot = document.getElementById('boulders');
+ const collRoot = document.getElementById('collectibles');
 
-/* -------------------------
-   UI helpers bindings
+ /* -------------------------
+    UI helpers bindings
    ------------------------- */
-const $ = s => document.querySelector(s);
-const hpBar = $('#hpBar'), stamBar = $('#stamBar'), manaBar = $('#manaBar');
-const hpText = $('#hpText'), stamText = $('#stamText'), manaText = $('#manaText');
-const hydrationEl = $('#hydration'), foodEl = $('#food'), enemyCountEl = $('#enemyCount');
-const xpEl = $('#xp'), xpMaxEl = $('#xpMax'), lvlEl = $('#level');
-const questEl = $('#quest'), equippedEl = $('#equipped'), statusEl = $('#status');
-const xp_small = $('#xp_small');
+ const $ = s => document.querySelector(s);
+ const hpBar = $('#hpBar'), stamBar = $('#stamBar'), manaBar = $('#manaBar');
+ const hpText = $('#hpText'), stamText = $('#stamText'), manaText = $('#manaText');
+ const hydrationEl = $('#hydration'), foodEl = $('#food'), enemyCountEl = $('#enemyCount');
+ const xpEl = $('#xp'), xpMaxEl = $('#xpMax'), lvlEl = $('#level');
+ const questEl = $('#quest'), equippedEl = $('#equipped'), statusEl = $('#status');
+ const xp_small = $('#xp_small');
 
-function refreshUI(){
-  hpBar.style.width = (state.hp/state.hpMax*100)+'%';
-  stamBar.style.width = (state.stamina/state.staminaMax*100)+'%';
-  manaBar.style.width = (state.mana/state.manaMax*100)+'%';
-  hpText.textContent = `${Math.round(state.hp)}/${state.hpMax}`;
-  stamText.textContent = `${Math.round(state.stamina)}/${state.staminaMax}`;
-  manaText.textContent = `${Math.round(state.mana)}/${state.manaMax}`;
-  hydrationEl.textContent = `${Math.round(state.hydration)}%`;
-  foodEl.textContent = `${Math.round(state.food)}%`;
-  xpEl.textContent = state.xp; xpMaxEl.textContent = state.xpMax; lvlEl.textContent = state.level;
-  questEl.textContent = state.quest;
-  equippedEl.textContent = state.equipped || 'None';
-  statusEl.textContent = statusEl.textContent || 'Idle';
-  xp_small.textContent = state.xp;
-  renderInventory(); renderCrafting(); updateEnemyCount();
-}
-refreshUI();
+ function refreshUI(){
+   hpBar.style.width = (state.hp/state.hpMax*100)+'%';
+   stamBar.style.width = (state.stamina/state.staminaMax*100)+'%';
+   manaBar.style.width = (state.mana/state.manaMax*100)+'%';
+   hpText.textContent = `${Math.round(state.hp)}/${state.hpMax}`;
+   stamText.textContent = `${Math.round(state.stamina)}/${state.staminaMax}`;
+   manaText.textContent = `${Math.round(state.mana)}/${state.manaMax}`;
+   hydrationEl.textContent = `${Math.round(state.hydration)}%`;
+   foodEl.textContent = `${Math.round(state.food)}%`;
+   xpEl.textContent = state.xp; xpMaxEl.textContent = state.xpMax; lvlEl.textContent = state.level;
+   questEl.textContent = state.quest;
+   equippedEl.textContent = state.equipped || 'None';
+   statusEl.textContent = statusEl.textContent || 'Idle';
+   xp_small.textContent = state.xp;
+   renderInventory(); renderCrafting(); updateEnemyCount();
+ }
+ refreshUI();
 
-/* -------------------------
-   Inventory / Crafting / Hotbar
+ /* -------------------------
+    Inventory / Crafting / Hotbar
    ------------------------- */
-const hotbarItems = document.querySelectorAll('.hotbar-item');
-hotbarItems.forEach((el,i)=>el.addEventListener('click', ()=> {
-  const item = el.dataset.item;
-  if(item){ state.equipped = item; statusPulse('Equipped: '+item); refreshUI(); }
-}));
-document.addEventListener('keydown', e=>{
-  const k = parseInt(e.key,10);
-  if(k>=1 && k<=hotbarItems.length) hotbarItems[k-1].click();
-});
+ const hotbarItems = document.querySelectorAll('.hotbar-item');
+ hotbarItems.forEach((el,i)=>el.addEventListener('click', ()=> {
+   const item = el.dataset.item;
+   if(item){ state.equipped = item; statusPulse('Equipped: '+item); refreshUI(); }
+ }));
+ document.addEventListener('keydown', e=>{
+   const k = parseInt(e.key,10);
+   if(k>=1 && k<=hotbarItems.length) hotbarItems[k-1].click();
+ });
 
-$('#more-btn').onclick = ()=>$('#backpack').classList.add('open');
-$('#close-bp').onclick = ()=>$('#backpack').classList.remove('open');
+ $('#more-btn').onclick = ()=>$('#backpack').classList.add('open');
+ $('#close-bp').onclick = ()=>$('#backpack').classList.remove('open');
 
-function iconFor(id){
-  const map = {
-    'stick':'https://media.sketchfab.com/models/2ba760f5cbd04b3987b84f81e96b535a/thumbnails/8d25bd62ead6468c8b86547ef6302bb7/8d577e6c35514084a58d43b26a32b7ef.jpeg',
-    'rock':'https://static.turbosquid.com/Preview/2016/02/14__08_36_36/1.png3ad48818-5004-478e-b81f-3bf514b39787Original.jpg',
-    'mushroom':'https://cdn-icons-png.flaticon.com/512/590/590685.png',
-    'potion':'https://tse4.mm.bing.net/th/id/OIP.ih2nf3-w5dOUrKWdnNBeHAHaHa?r=0&rs=1&pid=ImgDetMain&o=7&rm=3',
-    'water':'https://img-new.cgtrader.com/items/4178840/01789bd107/large/water-bottle-3d-model-01789bd107.jpg',
-    'wood-staff':'https://tse2.mm.bing.net/th/id/OIP.Z1VPKGwjqXxRVI-40zPQ7AHaJD?r=0&rs=1&pid=ImgDetMain&o=7&rm=3',
-    'stone-axe':'https://tse1.mm.bing.net/th/id/OIP.fDqfUYYaTknffHzcDrsd5gHaFc?r=0&rs=1&pid=ImgDetMain&o=7&rm=3'
-  };
-  return map[id] || map['stick'];
-}
+ function iconFor(id){
+   const map = {
+     'stick':'https://media.sketchfab.com/models/2ba760f5cbd04b3987b84f81e96b535a/thumbnails/8d25bd62ead6468c8b86547ef6302bb7/8d577e6c35514084a58d43b26a32b7ef.jpeg',
+     'rock':'https://static.turbosquid.com/Preview/2016/02/14__08_36_36/1.png3ad48818-5004-478e-b81f-3bf514b39787Original.jpg',
+     'mushroom':'https://cdn-icons-png.flaticon.com/512/590/590685.png',
+     'potion':'https://tse4.mm.bing.net/th/id/OIP.ih2nf3-w5dOUrKWdnNBeHAHaHa?r=0&rs=1&pid=ImgDetMain&o=7&rm=3',
+     'water':'https://img-new.cgtrader.com/items/4178840/01789bd107/large/water-bottle-3d-model-01789bd107.jpg',
+     'wood-staff':'https://tse2.mm.bing.net/th/id/OIP.Z1VPKGwjqXxRVI-40zPQ7AHaJD?r=0&rs=1&pid=ImgDetMain&o=7&rm=3',
+     'stone-axe':'https://tse1.mm.bing.net/th/id/OIP.fDqfUYYaTknffHzcDrsd5gHaFc?r=0&rs=1&pid=ImgDetMain&o=7&rm=3'
+   };
+   return map[id] || map['stick'];
+ }
 
-function renderInventory(){
-  const invGrid = $('#inv-grid'); if(!invGrid) return;
-  invGrid.innerHTML = '';
-  Object.keys(state.inventory).forEach(k=>{
-    const qty = state.inventory[k]||0;
-    const slot = document.createElement('div'); slot.className='slot';
-    slot.innerHTML = `<img src="${iconFor(k)}" style="width:40px;height:40px"><div class="qty">x${qty}</div>`;
-    slot.addEventListener('click', ()=>{
-      // equip or use
-      if((k==='stone-axe' || k==='wood-staff') && qty>0){ state.equipped = k; statusPulse('Equipped: '+k); }
-      if(k==='potion' && qty>0){ state.inventory.potion--; state.hp = Math.min(state.hp + 40, state.hpMax); statusPulse('Used potion +40 HP'); }
-      refreshUI();
-    });
-    invGrid.appendChild(slot);
-  });
-}
+ function renderInventory(){
+   const invGrid = $('#inv-grid'); if(!invGrid) return;
+   invGrid.innerHTML = '';
+   Object.keys(state.inventory).forEach(k=>{
+     const qty = state.inventory[k]||0;
+     const slot = document.createElement('div'); slot.className='slot';
+     slot.innerHTML = `<img src="${iconFor(k)}" style="width:40px;height:40px">x${qty}</div>`;
+     slot.addEventListener('click', ()=>{
+       // equip or use
+       if((k==='stone-axe' || k==='wood-staff') && qty>0){ state.equipped = k; statusPulse('Equipped: '+k); }
+       if(k==='potion' && qty>0){ state.inventory.potion--; state.hp = Math.min(state.hp + 40, state.hpMax); statusPulse('Used potion +40 HP'); }
+       refreshUI();
+     });
+     invGrid.appendChild(slot);
+   });
+ }
 
-function renderCrafting(){
-  const craftList = $('#craft-list'); craftList.innerHTML = '';
-  recipes.forEach(rc=>{
-    const row = document.createElement('div'); row.style.display='flex';row.style.justifyContent='space-between';row.style.alignItems='center';row.style.padding='6px 0';row.style.borderBottom='1px dashed rgba(255,255,255,0.03)';
-    const left = document.createElement('div'); left.innerHTML = `<div style="font-weight:600">${rc.name}</div><div style="font-size:12px;opacity:.85">${Object.entries(rc.need).map(([k,v])=>v+'× '+k).join(', ')}</div>`;
-    const btn = document.createElement('button'); btn.textContent='Craft';
-    btn.disabled = !Object.entries(rc.need).every(([k,v]) => (state.inventory[k]||0) >= v);
-    btn.onclick = ()=>{
-      Object.entries(rc.need).forEach(([k,v])=> state.inventory[k]-=v);
-      state.inventory[rc.id] = (state.inventory[rc.id]||0) + (rc.id==='potion'?1:1);
-      if(rc.id==='fireball' && !state.knownSpells.has('fireball')){ state.knownSpells.add('fireball'); state.spells.push({id:'fireball',name:'Fireball',charges:2,max:2,dmg:35,cost:15}); statusPulse('Learned Fireball'); }
-      statusPulse(rc.name + ' crafted');
-      refreshUI();
-    };
-    row.appendChild(left); row.appendChild(btn); craftList.appendChild(row);
-  });
-}
+ function renderCrafting(){
+   const craftList = $('#craft-list'); craftList.innerHTML = '';
+   recipes.forEach(rc=>{
+     const row = document.createElement('div'); row.style.display='flex';row.style.justifyContent='space-between';row.style.alignItems='center';row.style.padding='6px 0';row.style.borderBottom='1px dashed rgba(255,255,255,0.03)';
+     const left = document.createElement('div'); left.innerHTML = `<div style="font-weight:600">${rc.name}
+${Object.entries(rc.need).map(([k,v])=>v+'× '+k).join(', ')}</div>`;
+     const btn = document.createElement('button'); btn.textContent='Craft';
+     btn.disabled = !Object.entries(rc.need).every(([k,v]) => (state.inventory[k]||0) >= v);
+     btn.onclick = ()=>{
+       Object.entries(rc.need).forEach(([k,v])=> state.inventory[k]-=v);
+       state.inventory[rc.id] = (state.inventory[rc.id]||0) + (rc.id==='potion'?1:1);
+       if(rc.id==='fireball' && !state.knownSpells.has('fireball')){ state.knownSpells.add('fireball'); state.spells.push({id:'fireball',name:'Fireball',charges:2,max:2,dmg:35,cost:15}); statusPulse('Learned Fireball'); }
+       statusPulse(rc.name + ' crafted');
+       refreshUI();
+     };
+     row.appendChild(left); row.appendChild(btn); craftList.appendChild(row);
+   });
+ }
 
-/* -------------------------
-   Upgrades (spend XP)
+ /* -------------------------
+    Upgrades (spend XP)
    ------------------------- */
-$('#up-hp').onclick = ()=>{
-  if(state.xp >= 50){ state.xp -= 50; state.hpMax += 15; state.hp = state.hpMax; statusPulse('Max HP increased'); refreshUI(); } else statusPulse('Not enough XP');
-};
-$('#up-stam').onclick = ()=>{
-  if(state.xp >= 30){ state.xp -= 30; state.staminaMax += 15; state.stamina = state.staminaMax; statusPulse('Max Stamina increased'); refreshUI(); } else statusPulse('Not enough XP');
-};
-$('#up-mana').onclick = ()=>{
-  if(state.xp >= 30){ state.xp -= 30; state.manaMax += 12; state.mana = state.manaMax; statusPulse('Max Mana increased'); refreshUI(); } else statusPulse('Not enough XP');
-};
+ $('#up-hp').onclick = ()=>{
+   if(state.xp >= 50){ state.xp -= 50; state.hpMax += 15; state.hp = state.hpMax; statusPulse('Max HP increased'); refreshUI(); }
+   else statusPulse('Not enough XP');
+ };
+ $('#up-stam').onclick = ()=>{
+   if(state.xp >= 30){ state.xp -= 30; state.staminaMax += 15; state.stamina = state.staminaMax; statusPulse('Max Stamina increased'); refreshUI(); }
+   else statusPulse('Not enough XP');
+ };
+ $('#up-mana').onclick = ()=>{
+   if(state.xp >= 30){ state.xp -= 30; state.manaMax += 12; state.mana = state.manaMax; statusPulse('Max Mana increased'); refreshUI(); }
+   else statusPulse('Not enough XP');
+ };
 
-/* -------------------------
-   Environment: trees + boulders (minable)
+ /* -------------------------
+    Environment: trees + boulders (minable)
    ------------------------- */
-function spawnTree(x,z, hp=30){
-  const ent = document.createElement('a-entity');
-  ent.setAttribute('position', `${x} 0 ${z}`);
-  // trunk
-  const trunk = document.createElement('a-cylinder'); trunk.setAttribute('height','2'); trunk.setAttribute('radius','0.25'); trunk.setAttribute('color','#8B5A2B'); trunk.setAttribute('position','0 1 0'); trunk.setAttribute('material','src:#bark; roughness:1');
-  // leaves
-  const crown = document.createElement('a-sphere'); crown.setAttribute('radius','1.1'); crown.setAttribute('position','0 2.1 0'); crown.setAttribute('color','#0b6b2e');
-  ent.appendChild(trunk); ent.appendChild(crown);
-  ent.classList.add('tree');
-  ent.__data = { hp: hp };
-  // clicking the tree attempts to chop
-  ent.addEventListener('click', ()=> {
-    chopEntity(ent, 'tree');
-  });
-  treesRoot.appendChild(ent);
-}
-function spawnBoulder(x,z, hp=40){
-  const e = document.createElement('a-entity');
-  e.setAttribute('position', `${x} 0 ${z}`);
-  const rock = document.createElement('a-sphere'); rock.setAttribute('radius','0.6'); rock.setAttribute('color','#777'); rock.setAttribute('position','0 0.6 0');
-  e.appendChild(rock);
-  e.classList.add('boulder');
-  e.__data = { hp: hp };
-  e.addEventListener('click', ()=> { chopEntity(e, 'boulder'); });
-  bouldersRoot.appendChild(e);
-}
+ function spawnTree(x,z, hp=30){
+   const ent = document.createElement('a-entity');
+   ent.setAttribute('position', `${x} 0 ${z}`);
+   // trunk
+   const trunk = document.createElement('a-cylinder'); trunk.setAttribute('height','2'); trunk.setAttribute('radius','0.25'); trunk.setAttribute('color','#8B5A2B'); trunk.setAttribute('position','0 1 0'); trunk.setAttribute('material','src:#bark; roughness:1');
+   // leaves
+   const crown = document.createElement('a-sphere'); crown.setAttribute('radius','1.1'); crown.setAttribute('position','0 2.1 0'); crown.setAttribute('color','#0b6b2e');
+   ent.appendChild(trunk); ent.appendChild(crown);
+   ent.classList.add('tree');
+   ent.__data = { hp: hp };
+   // clicking the tree attempts to chop
+   ent.addEventListener('click', ()=> {
+     chopEntity(ent, 'tree');
+   });
+   treesRoot.appendChild(ent);
+ }
+ function spawnBoulder(x,z, hp=40){
+   const e = document.createElement('a-entity');
+   e.setAttribute('position', `${x} 0 ${z}`);
+   const rock = document.createElement('a-sphere'); rock.setAttribute('radius','0.6'); rock.setAttribute('color','#777'); rock.setAttribute('position','0 0.6 0');
+   e.appendChild(rock);
+   e.classList.add('boulder');
+   e.__data = { hp: hp };
+   e.addEventListener('click', ()=> { chopEntity(e, 'boulder'); });
+   bouldersRoot.appendChild(e);
+ }
 
-function chopEntity(ent, type){
-  // if equipped with stone-axe, faster; else slow
-  const tool = state.equipped;
-  const power = (tool === 'stone-axe') ? 12 : (tool === 'wood-staff' ? 3 : 4);
-  ent.__data.hp -= power;
-  statusPulse(`${type} hit -${power}`);
-  if(ent.__data.hp <= 0){
-    // spawn resources
-    const pos = ent.object3D.position;
-    if(type==='tree'){
-      // spawn 2 sticks + maybe mushrooms
-      spawnCollectible('stick', {x: pos.x + (Math.random()-0.5), z: pos.z + (Math.random()-0.5)});
-      spawnCollectible('stick', {x: pos.x + (Math.random()-0.5), z: pos.z + (Math.random()-0.5)});
-      if(Math.random()<0.4) spawnCollectible('mushroom', {x: pos.x + (Math.random()-0.5), z: pos.z + (Math.random()-0.5)});
-    } else {
-      // boulder: rocks
-      spawnCollectible('rock', {x: pos.x + (Math.random()-0.5), z: pos.z + (Math.random()-0.5)});
-      spawnCollectible('rock', {x: pos.x + (Math.random()-0.5), z: pos.z + (Math.random()-0.5)});
-    }
-    // remove entity
-    if(ent.parentNode) ent.parentNode.removeChild(ent);
-  }
-}
+ function chopEntity(ent, type){
+   // if equipped with stone-axe, faster; else slow
+   const tool = state.equipped;
+   const power = (tool === 'stone-axe') ? 12 : (tool === 'wood-staff' ? 3 : 4);
+   ent.__data.hp -= power;
+   statusPulse(`${type} hit -${power}`);
+   if(ent.__data.hp <= 0){
+     // spawn resources
+     const pos = ent.object3D.position;
+     if(type==='tree'){
+       // spawn 2 sticks + maybe mushrooms
+       spawnCollectible('stick', {x: pos.x + (Math.random()-0.5), z: pos.z + (Math.random()-0.5)});
+       spawnCollectible('stick', {x: pos.x + (Math.random()-0.5), z: pos.z + (Math.random()-0.5)});
+       if(Math.random()<0.4) spawnCollectible('mushroom', {x: pos.x + (Math.random()-0.5), z: pos.z + (Math.random()-0.5)});
+     } else {
+       // boulder: rocks
+       spawnCollectible('rock', {x: pos.x + (Math.random()-0.5), z: pos.z + (Math.random()-0.5)});
+       spawnCollectible('rock', {x: pos.x + (Math.random()-0.5), z: pos.z + (Math.random()-0.5)});
+     }
+     // remove entity
+     if(ent.parentNode) ent.parentNode.removeChild(ent);
+   }
+ }
 
-/* seed environment (near player) */
-for(let i=0;i<12;i++) spawnTree((Math.random()*16-8).toFixed(2), (Math.random()*16-8).toFixed(2));
-for(let i=0;i<8;i++) spawnBoulder((Math.random()*16-8).toFixed(2), (Math.random()*16-8).toFixed(2));
+ /* seed environment (near player) */
+ for(let i=0;i<12;i++) spawnTree((Math.random()*16-8).toFixed(2), (Math.random()*16-8).toFixed(2));
+ for(let i=0;i<8;i++) spawnBoulder((Math.random()*16-8).toFixed(2), (Math.random()*16-8).toFixed(2));
 
-/* -------------------------
-   Collectibles spawn + pickup
+ /* -------------------------
+    Collectibles spawn + pickup
    ------------------------- */
-function spawnCollectible(type, pos){
-  const e = document.createElement('a-entity'); e.setAttribute('position', `${pos.x} 0 ${pos.z}`);
-  e.__type = type;
-  if(type==='stick') e.innerHTML = `<a-cylinder color="#7a522a" height="0.6" radius="0.05" position="0 0.3 0"></a-cylinder>`;
-  if(type==='rock') e.innerHTML = `<a-sphere color="#777" radius="0.22" position="0 0.22 0"></a-sphere>`;
-  if(type==='mushroom') e.innerHTML = `<a-cylinder color="#cfa07f" height="0.18" radius="0.05" position="0 0.09 0"></a-cylinder><a-sphere color="#ff3154" radius="0.15" position="0 0.22 0"></a-sphere>`;
-  e.classList.add('collectible','clickable');
-  // click to pick up
-  e.addEventListener('click', ()=> {
-    state.inventory[type] = (state.inventory[type]||0)+1;
-    if(e.parentNode) e.parentNode.removeChild(e);
-    statusPulse('Picked up ' + type);
-    refreshUI();
-  });
-  collRoot.appendChild(e);
-}
+ function spawnCollectible(type, pos){
+   const e = document.createElement('a-entity'); e.setAttribute('position', `${pos.x} 0 ${pos.z}`);
+   e.__type = type;
+   if(type==='stick') e.innerHTML = `<a-cylinder color="#7a522a" height="0.6" radius="0.05" position="0 0.3 0"></a-cylinder>`;
+   if(type==='rock') e.innerHTML = `<a-sphere color="#777" radius="0.22" position="0 0.22 0"></a-sphere>`;
+   if(type==='mushroom') e.innerHTML = `<a-cylinder color="#cfa07f" height="0.18" radius="0.05" position="0 0.09 0"></a-cylinder><a-sphere color="#ff3154" radius="0.15" position="0 0.22 0"></a-sphere>`;
+   e.classList.add('collectible','clickable');
+   // click to pick up
+   e.addEventListener('click', ()=> {
+     state.inventory[type] = (state.inventory[type]||0)+1;
+     if(e.parentNode) e.parentNode.removeChild(e);
+     statusPulse('Picked up ' + type);
+     refreshUI();
+   });
+   collRoot.appendChild(e);
+ }
 
-/* seed some pickups */
-for(let i=0;i<18;i++){
-  const pos = {x:(Math.random()*18-9), z:(Math.random()*18-9)};
-  spawnCollectible(['stick','rock','mushroom'][Math.floor(Math.random()*3)], pos);
-}
+ /* seed some pickups */
+ for(let i=0;i<18;i++){
+   const pos = {x:(Math.random()*18-9), z:(Math.random()*18-9)};
+   spawnCollectible(['stick','rock','mushroom'][Math.floor(Math.random()*3)], pos);
+ }
 
-/* pickup by E when nearby handled in interact logic */
+ /* pickup by E when nearby handled in interact logic */
 
-/* -------------------------
-   Enemies: spawn with faces + HP bar; aggro only when provoked
+ /* -------------------------
+    Enemies: spawn with faces + HP bar; aggro only when provoked
    ------------------------- */
-function createEnemy(x,z){
-  const e = document.createElement('a-entity'); e.setAttribute('position', `${x} 0.5 ${z}`);
-  // body
-  const body = document.createElement('a-sphere'); body.setAttribute('radius','0.5'); body.setAttribute('color','#ff5c5c'); body.setAttribute('shadow','cast:true');
-  // eyes
-  const eyeL = document.createElement('a-sphere'); eyeL.setAttribute('radius','0.07'); eyeL.setAttribute('color','#fff'); eyeL.setAttribute('position','-0.15 0.12 0.45');
-  const eyeR = document.createElement('a-sphere'); eyeR.setAttribute('radius','0.07'); eyeR.setAttribute('color','#fff'); eyeR.setAttribute('position','0.15 0.12 0.45');
-  const pupilL = document.createElement('a-sphere'); pupilL.setAttribute('radius','0.03'); pupilL.setAttribute('color','#000'); pupilL.setAttribute('position','-0.15 0.12 0.52');
-  const pupilR = document.createElement('a-sphere'); pupilR.setAttribute('radius','0.03'); pupilR.setAttribute('color','#000'); pupilR.setAttribute('position','0.15 0.12 0.52');
-  // hp plane above head (a simple text)
-  const hpText = document.createElement('a-text'); hpText.setAttribute('value','HP: 60'); hpText.setAttribute('position','0 1 0'); hpText.setAttribute('align','center'); hpText.setAttribute('color','#fff'); hpText.setAttribute('scale','1.2 1.2 1.2');
+ function createEnemy(x,z){
+   const e = document.createElement('a-entity'); e.setAttribute('position', `${x} 0.5 ${z}`);
+   // body
+   const body = document.createElement('a-sphere'); body.setAttribute('radius','0.5'); body.setAttribute('color','#ff5c5c'); body.setAttribute('shadow','cast:true');
+   // eyes
+   const eyeL = document.createElement('a-sphere'); eyeL.setAttribute('radius','0.07'); eyeL.setAttribute('color','#fff'); eyeL.setAttribute('position','-0.15 0.12 0.45');
+   const eyeR = document.createElement('a-sphere'); eyeR.setAttribute('radius','0.07'); eyeR.setAttribute('color','#fff'); eyeR.setAttribute('position','0.15 0.12 0.45');
+   const pupilL = document.createElement('a-sphere'); pupilL.setAttribute('radius','0.03'); pupilL.setAttribute('color','#000'); pupilL.setAttribute('position','-0.15 0.12 0.52');
+   const pupilR = document.createElement('a-sphere'); pupilR.setAttribute('radius','0.03'); pupilR.setAttribute('color','#000'); pupilR.setAttribute('position','0.15 0.12 0.52');
+   // hp plane above head (a simple text)
+   const hpText = document.createElement('a-text'); hpText.setAttribute('value','HP: 60'); hpText.setAttribute('position','0 1 0'); hpText.setAttribute('align','center'); hpText.setAttribute('color','#fff'); hpText.setAttribute('scale','1.2 1.2 1.2');
 
-  e.appendChild(body); e.appendChild(eyeL); e.appendChild(eyeR); e.appendChild(pupilL); e.appendChild(pupilR); e.appendChild(hpText);
-  e.classList.add('enemy','clickable');
-  e.__data = { hp: 60, alive: true, aggro: false, vx:0, vz:0, hpText: hpText, respawning:false };
-  // clicking an enemy provokes it (and doesn't damage directly)
-  e.addEventListener('click', ()=> { e.__data.aggro = true; statusPulse('You provoked an enemy'); });
-  enemiesRoot.appendChild(e);
-  return e;
-}
+   e.appendChild(body); e.appendChild(eyeL); e.appendChild(eyeR); e.appendChild(pupilL); e.appendChild(pupilR); e.appendChild(hpText);
+   e.classList.add('enemy','clickable');
+   e.__data = { hp: 60, alive: true, aggro: false, vx:0, vz:0, hpText: hpText, respawning:false, cooldown:0 };
+   // clicking an enemy provokes it (and doesn't damage directly)
+   e.addEventListener('click', ()=> { e.__data.aggro = true; statusPulse('You provoked an enemy'); });
+   enemiesRoot.appendChild(e);
+   return e;
+ }
 
-/* spawn initial enemies safely away from player */
-function spawnEnemySafe(){
-  const playerPos = document.getElementById('player').object3D.position;
-  let x,z,tries=0;
-  do { x = (Math.random()*30-10); z = (Math.random()*30-10); tries++; } while(Math.hypot(x-playerPos.x,z-playerPos.z) < 5 && tries < 30);
-  createEnemy(x.toFixed(2), z.toFixed(2));
-}
-for(let i=0;i<5;i++) spawnEnemySafe();
-updateEnemyCount();
+ /* spawn initial enemies safely away from player */
+ function spawnEnemySafe(){
+   const playerPos = document.getElementById('player').object3D.position;
+   let x,z,tries=0;
+   do { x = (Math.random()*30-10); z = (Math.random()*30-10); tries++; } while(Math.hypot(x-playerPos.x,z-playerPos.z) < 5 && tries < 30);
+   createEnemy(x.toFixed(2), z.toFixed(2));
+ }
+ for(let i=0;i<5;i++) spawnEnemySafe();
+ updateEnemyCount();
 
-function updateEnemyCount(){ $('#enemyCount').textContent = enemiesRoot.querySelectorAll('.enemy').length; }
+ function updateEnemyCount(){ $('#enemyCount').textContent = enemiesRoot.querySelectorAll('.enemy').length; }
 
-/* Enemy AI loop — allow stacking (small/no separation) */
-let lastTime = performance.now();
-function enemyLoop(now){
-  const dt = (now - lastTime) / 1000; lastTime = now;
-  const playerPos = document.getElementById('player').object3D.position;
-  const all = Array.from(enemiesRoot.children);
-  all.forEach(e=>{
-    if(!e.__data || !e.__data.alive) return;
-    const pos = e.object3D.position;
-    if(e.__data.aggro){
-      const dx = playerPos.x - pos.x, dz = playerPos.z - pos.z; const dist = Math.hypot(dx,dz);
-      const len = Math.max(dist,0.001);
-      // desired velocity toward player (no separation, so they can stack closely)
-      const speed = 1.0;
-      e.__data.vx = (dx/len)*speed;
-      e.__data.vz = (dz/len)*speed;
-      pos.x += e.__data.vx * dt; pos.z += e.__data.vz * dt;
-      e.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
-      if(dist < 1.0 && e.__data.cooldown <= 0){
-        // attack
-        damagePlayer(6 + Math.random()*3);
-        e.__data.cooldown = 0.9;
-      }
-    } else {
-      // idle tiny wander
-      if(Math.random() < 0.002){ e.__data.vx += (Math.random()-0.5)*0.4; e.__data.vz += (Math.random()-0.5)*0.4; }
-      e.__data.vx *= 0.98; e.__data.vz *= 0.98;
-      pos.x += e.__data.vx * dt; pos.z += e.__data.vz * dt;
-      e.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
-    }
-    if(e.__data.cooldown > 0) e.__data.cooldown -= dt;
-    // update hp text
-    e.__data.hpText.setAttribute('value', `HP: ${Math.max(0, Math.round(e.__data.hp))}`);
-    // cleanup if far away
-    if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) > 70 && !e.__data.respawning){
-      if(e.parentNode) e.parentNode.removeChild(e);
-    }
-  });
-  // keep population
-  if(enemiesRoot.children.length < MAX_ENEMIES){
-    spawnEnemySafe();
-    updateEnemyCount();
-  }
-  requestAnimationFrame(enemyLoop);
-}
-requestAnimationFrame(enemyLoop);
+ /* Enemy AI loop — allow stacking (small/no separation) */
+ let lastTime = performance.now();
+ function enemyLoop(now){
+   const dt = (now - lastTime) / 1000; lastTime = now;
+   const playerPos = document.getElementById('player').object3D.position;
+   const all = Array.from(enemiesRoot.children);
+   all.forEach(e=>{
+     if(!e.__data || !e.__data.alive) return;
+     const pos = e.object3D.position;
+     if(e.__data.aggro){
+       const dx = playerPos.x - pos.x, dz = playerPos.z - pos.z; const dist = Math.hypot(dx,dz);
+       const len = Math.max(dist,0.001);
+       // desired velocity toward player (no separation, so they can stack closely)
+       const speed = 1.0;
+       e.__data.vx = (dx/len)*speed;
+       e.__data.vz = (dz/len)*speed;
+       pos.x += e.__data.vx * dt; pos.z += e.__data.vz * dt;
+       e.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+       if(dist < 1.0 && e.__data.cooldown <= 0){
+         // attack
+         damagePlayer(6 + Math.random()*3);
+         e.__data.cooldown = 0.9;
+       }
+     } else {
+       // idle tiny wander
+       if(Math.random() < 0.002){ e.__data.vx += (Math.random()-0.5)*0.4; e.__data.vz += (Math.random()-0.5)*0.4; }
+       e.__data.vx *= 0.98; e.__data.vz *= 0.98;
+       pos.x += e.__data.vx * dt; pos.z += e.__data.vz * dt;
+       e.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+     }
+     if(e.__data.cooldown > 0) e.__data.cooldown -= dt;
+     // update hp text
+     e.__data.hpText.setAttribute('value', `HP: ${Math.max(0, Math.round(e.__data.hp))}`);
+     // cleanup if far away
+     if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) > 70 && !e.__data.respawning){
+       if(e.parentNode) e.parentNode.removeChild(e);
+     }
+   });
+   // keep population
+   if(enemiesRoot.children.length < MAX_ENEMIES){
+     spawnEnemySafe();
+     updateEnemyCount();
+   }
+   requestAnimationFrame(enemyLoop);
+ }
+ requestAnimationFrame(enemyLoop);
 
-/* -------------------------
-   Combat (raycast attack) & enemy HP display + death handling
+ /* -------------------------
+    Combat (raycast attack) & enemy HP display + death handling
    ------------------------- */
-const cameraEl = document.querySelector('#camera');
-function raycastAttack(range=6){
-  const cam = cameraEl.object3D;
-  const origin = new AFRAME.THREE.Vector3(); origin.setFromMatrixPosition(cam.matrixWorld);
-  const dir = new AFRAME.THREE.Vector3(0,0,-1).applyQuaternion(cam.quaternion).normalize();
-  const ray = new AFRAME.THREE.Raycaster(origin, dir, 0, range);
-  const enemyObjs = Array.from(enemiesRoot.children).map(n=>n.object3D);
-  const intersects = ray.intersectObjects(enemyObjs, true);
-  if(intersects.length){
-    // find closest parent entity
-    let hit = intersects[0].object; let ent = null;
-    while(hit && !ent){
-      if(hit.el && hit.el.classList && hit.el.classList.contains('enemy')) ent = hit.el;
-      hit = hit.parent;
-    }
-    if(ent){
-      // compute damage dependent on tool
-      let dmg = 6; // default fist
-      if(state.equipped === 'stone-axe') dmg = 28;
-      else if(state.equipped === 'wood-staff') dmg = 18;
-      // spells can add damage if available
-      const spark = state.spells.find(s=>s.id==='spark');
-      if(spark && spark.charges > 0 && state.mana >= spark.cost){
-        spark.charges--; state.mana = Math.max(0, state.mana - spark.cost); dmg += spark.dmg;
-      }
-      ent.__data.hp -= dmg;
-      ent.__data.aggro = true; // provoked
-      statusPulse('Hit enemy -' + Math.round(dmg));
-      // if dead
-      if(ent.__data.hp <= 0 && ent.__data.alive){
-        ent.__data.alive = false;
-        ent.setAttribute('opacity','0.6'); ent.setAttribute('color','#333');
-        // drop loot
-        if(Math.random() < 0.7) spawnCollectible(['stick','rock','mushroom'][Math.floor(Math.random()*3)], {x: ent.object3D.position.x + (Math.random()-0.5), z: ent.object3D.position.z + (Math.random()-0.5)});
-        addXP(25);
-        // remove after short time and respawn after 2 minutes
-        setTimeout(()=>{ if(ent.parentNode) ent.parentNode.removeChild(ent); }, 3000);
-        setTimeout(()=> spawnEnemySafe(), 120000);
-        updateEnemyCount();
-      }
-      refreshUI();
-      return true;
-    }
-  }
-  statusPulse('Missed');
-  return false;
-}
-document.addEventListener('mousedown', (e)=>{ if(e.button === 0) raycastAttack(); });
-document.addEventListener('keydown', e=>{ if(e.code === 'Space'){ e.preventDefault(); raycastAttack(); } });
+ const cameraEl = document.querySelector('#camera');
+ function raycastAttack(range=6){
+   const cam = cameraEl.object3D;
+   const origin = new AFRAME.THREE.Vector3(); origin.setFromMatrixPosition(cam.matrixWorld);
+   const dir = new AFRAME.THREE.Vector3(0,0,-1).applyQuaternion(cam.quaternion).normalize();
+   const ray = new AFRAME.THREE.Raycaster(origin, dir, 0, range);
+   const enemyObjs = Array.from(enemiesRoot.children).map(n=>n.object3D);
+   const intersects = ray.intersectObjects(enemyObjs, true);
+   if(intersects.length){
+     // find closest parent entity
+     let hit = intersects[0].object; let ent = null;
+     while(hit && !ent){
+       if(hit.el && hit.el.classList && hit.el.classList.contains('enemy')) ent = hit.el;
+       hit = hit.parent;
+     }
+     if(ent){
+       // compute damage dependent on tool
+       let dmg = 6; // default fist
+       if(state.equipped === 'stone-axe') dmg = 28;
+       else if(state.equipped === 'wood-staff') dmg = 18;
+       // spells can add damage if available
+       const spark = state.spells.find(s=>s.id==='spark');
+       if(spark && spark.charges > 0 && state.mana >= spark.cost){
+         spark.charges--; state.mana = Math.max(0, state.mana - spark.cost); dmg += spark.dmg;
+       }
+       ent.__data.hp -= dmg;
+       ent.__data.aggro = true; // provoked
+       statusPulse('Hit enemy -' + Math.round(dmg));
+       // if dead
+       if(ent.__data.hp <= 0 && ent.__data.alive){
+         ent.__data.alive = false;
+         ent.setAttribute('opacity','0.6'); ent.setAttribute('color','#333');
+         // drop loot
+         if(Math.random() < 0.7) spawnCollectible(['stick','rock','mushroom'][Math.floor(Math.random()*3)], {x: ent.object3D.position.x + (Math.random()-0.5), z: ent.object3D.position.z + (Math.random()-0.5)});
+         addXP(25);
+         // remove after short time and respawn after 2 minutes
+         setTimeout(()=>{ if(ent.parentNode) ent.parentNode.removeChild(ent); }, 3000);
+         setTimeout(()=> spawnEnemySafe(), 120000);
+         updateEnemyCount();
+       }
+       refreshUI();
+       return true;
+     }
+   }
+   statusPulse('Missed');
+   return false;
+ }
+ document.addEventListener('mousedown', (e)=>{ if(e.button === 0) raycastAttack(); });
+ document.addEventListener('keydown', e=>{
+   if(e.code === 'Space'){ e.preventDefault(); raycastAttack(); }
+ });
 
-/* -------------------------
-   Interact (E): pick up, pond, NPC talk
+ /* -------------------------
+    Interact (E): pick up, pond, NPC talk
    ------------------------- */
-function interactNear(){
-  const playerPos = document.getElementById('player').object3D.position;
-  // collectibles
-  for(const c of Array.from(collRoot.children)){
-    const pos = c.object3D.position;
-    if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) < 1.6){
-      state.inventory[c.__type] = (state.inventory[c.__type]||0)+1;
-      if(c.parentNode) c.parentNode.removeChild(c);
-      statusPulse('Picked up ' + c.__type); refreshUI(); return;
-    }
-  }
-  // ponds
-  for(const id of ['pond1','pond2']){
-    const p = document.getElementById(id); const pos = p.object3D.position;
-    if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) < 2.0){
-      state.inventory.water = (state.inventory.water||0) + 1; statusPulse('Filled water'); refreshUI(); return;
-    }
-  }
-  // NPC
-  const npcGroup = document.getElementById('npc-group'); const np = npcGroup.object3D.position;
-  if(Math.hypot(np.x-playerPos.x,np.z-playerPos.z) < 2.2){
-    // talk/quest logic
-    if(state.quest === 'Talk to the Forest Elder'){ state.quest = 'Collect 5 sticks for the Elder'; statusPulse('Quest started: Collect 5 sticks'); }
-    else if(state.quest === 'Collect 5 sticks for the Elder'){
-      if((state.inventory.stick||0) >= 5){
-        state.inventory.stick -= 5; addXP(60); state.quest = 'Complete! Elder teaches Fireball.'; if(!state.knownSpells.has('fireball')){ state.knownSpells.add('fireball'); state.spells.push({id:'fireball',name:'Fireball',charges:2,max:2,dmg:35,cost:15}); } statusPulse('Quest complete! Learned Fireball'); refreshUI(); }
-      else statusPulse('You need 5 sticks');
-    } else statusPulse('The Elder nods.');
-    refreshUI(); return;
-  }
-  statusPulse('Nothing to interact');
-}
-document.addEventListener('keydown', e=>{ if(e.key.toLowerCase() === 'e') interactNear(); });
+ function interactNear(){
+   const playerPos = document.getElementById('player').object3D.position;
+   // collectibles
+   for(const c of Array.from(collRoot.children)){
+     const pos = c.object3D.position;
+     if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) < 1.6){
+       state.inventory[c.__type] = (state.inventory[c.__type]||0)+1;
+       if(c.parentNode) c.parentNode.removeChild(c);
+       statusPulse('Picked up ' + c.__type); refreshUI();
+       return;
+     }
+   }
+   // ponds
+   for(const id of ['pond1','pond2']){
+     const p = document.getElementById(id); const pos = p.object3D.position;
+     if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) < 2.0){
+       state.inventory.water = (state.inventory.water||0) + 1; statusPulse('Filled water'); refreshUI();
+       return;
+     }
+   }
+   // NPC
+   const npcGroup = document.getElementById('npc-group');
+   const np = npcGroup.object3D.position;
+   if(Math.hypot(np.x-playerPos.x,np.z-playerPos.z) < 2.2){
+     // talk/quest logic
+     if(state.quest === 'Talk to the Forest Elder'){
+       state.quest = 'Collect 5 sticks for the Elder';
+       statusPulse('Quest started: Collect 5 sticks');
+     }
+     else if(state.quest === 'Collect 5 sticks for the Elder'){
+       if((state.inventory.stick||0) >= 5){
+         state.inventory.stick -= 5;
+         addXP(60);
+         state.quest = 'Complete! Elder teaches Fireball.';
+         if(!state.knownSpells.has('fireball')){
+           state.knownSpells.add('fireball');
+           state.spells.push({id:'fireball',name:'Fireball',charges:2,max:2,dmg:35,cost:15});
+           statusPulse('Quest complete! Learned Fireball');
+         }
+         refreshUI();
+       } else {
+         statusPulse('You need 5 sticks');
+       }
+     } else {
+       statusPulse('The Elder nods.');
+     }
+     refreshUI();
+     return;
+   }
+   statusPulse('Nothing to interact');
+ }
+ document.addEventListener('keydown', e=>{ if(e.key.toLowerCase() === 'e') interactNear(); });
 
-/* -------------------------
-   XP / leveling
+ /* -------------------------
+    XP / leveling
    ------------------------- */
-function addXP(v){
-  state.xp += v;
-  while(state.xp >= state.xpMax){
-    state.xp -= state.xpMax; state.level++; state.xpMax = Math.floor(state.xpMax * 1.25);
-    state.hpMax += 8; state.staminaMax += 6; state.manaMax += 6;
-    state.hp = state.hpMax; state.stamina = state.staminaMax; state.mana = state.manaMax;
-    statusPulse('Level up!');
-  }
-  refreshUI();
-}
+ function addXP(v){
+   state.xp += v;
+   while(state.xp >= state.xpMax){
+     state.xp -= state.xpMax; state.level++; state.xpMax = Math.floor(state.xpMax * 1.25);
+     state.hpMax += 8; state.staminaMax += 6; state.manaMax += 6;
+     state.hp = state.hpMax; state.stamina = state.staminaMax; state.mana = state.manaMax;
+     statusPulse('Level up!');
+   }
+   refreshUI();
+ }
 
-/* -------------------------
-   Damage / die / respawn
+ /* -------------------------
+    Damage / die / respawn
    ------------------------- */
-function damagePlayer(amount){
-  if(state.hp <= 0) return;
-  state.hp = Math.max(0, state.hp - amount);
-  document.getElementById('damage-flash').style.opacity = 1; setTimeout(()=>document.getElementById('damage-flash').style.opacity = 0, 180);
-  refreshUI();
-  if(state.hp <= 0){ statusPulse('You died. Respawning...'); disableControls(); setTimeout(respawnPlayer, 4000); }
-}
-function disableControls(){ const cam = document.getElementById('camera'); cam.components['look-controls']?.pause(); cam.components['wasd-controls']?.pause(); }
-function respawnPlayer(){ const player = document.getElementById('player'); player.setAttribute('position','0 1.6 0'); state.hp = state.hpMax; state.stamina = state.staminaMax; state.mana = state.manaMax; state.hydration = 100; state.food = 100; document.getElementById('camera').components['look-controls']?.play(); document.getElementById('camera').components['wasd-controls']?.play(); statusPulse('You respawned'); refreshUI(); }
+ function damagePlayer(amount){
+   if(state.hp <= 0) return;
+   state.hp = Math.max(0, state.hp - amount);
+   document.getElementById('damage-flash').style.opacity = 1; setTimeout(()=>document.getElementById('damage-flash').style.opacity = 0, 180);
+   refreshUI();
+   if(state.hp <= 0){ statusPulse('You died. Respawning...'); disableControls(); setTimeout(respawnPlayer, 4000); }
+ }
+ function disableControls(){
+   const cam = document.getElementById('camera');
+   cam.components['look-controls']?.pause();
+   cam.components['wasd-controls']?.pause();
+ }
+ function respawnPlayer(){
+   const player = document.getElementById('player');
+   player.setAttribute('position','0 1.6 0');
+   state.hp = state.hpMax; state.stamina = state.staminaMax; state.mana = state.manaMax;
+   state.hydration = 100; state.food = 100;
+   document.getElementById('camera').components['look-controls']?.play();
+   document.getElementById('camera').components['wasd-controls']?.play();
+   statusPulse('You respawned'); refreshUI();
+ }
 
-/* -------------------------
-   Passive ticks (gentle)
+ /* -------------------------
+    Passive ticks (gentle)
    ------------------------- */
-setInterval(()=>{
-  state.mana = Math.min(state.manaMax, state.mana + 0.3);
-  state.spells.forEach(s=>{ if(s.charges < s.max && Math.random() < 0.04) s.charges++; });
-  state.food = Math.max(0, state.food - 0.01);
-  state.hydration = Math.max(0, state.hydration - 0.01);
-  if(state.food <= 0 || state.hydration <= 0) state.hp = Math.max(0, state.hp - 0.03);
-  refreshUI();
-}, 1000);
+ setInterval(()=>{
+   state.mana = Math.min(state.manaMax, state.mana + 0.3);
+   state.spells.forEach(s=>{ if(s.charges < s.max && Math.random() < 0.04) s.charges++; });
+   state.food = Math.max(0, state.food - 0.01);
+   state.hydration = Math.max(0, state.hydration - 0.01);
+   if(state.food <= 0 || state.hydration <= 0) state.hp = Math.max(0, state.hp - 0.03);
+   refreshUI();
+ }, 1000);
 
-/* -------------------------
-   Prompt when near interactions
+ /* -------------------------
+    Prompt when near interactions
    ------------------------- */
-function updatePrompt(){
-  const playerPos = document.getElementById('player').object3D.position;
-  let show = false;
-  for(const c of Array.from(collRoot.children)){ const pos = c.object3D.position; if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) < 1.6){ show = true; break; } }
-  if(!show) for(const id of ['pond1','pond2']){ const p = document.getElementById(id); if(Math.hypot(p.object3D.position.x-playerPos.x,p.object3D.position.z-playerPos.z) < 2){ show = true; break; } }
-  if(!show){ const npc = document.getElementById('npc-group'); if(Math.hypot(npc.object3D.position.x-playerPos.x,npc.object3D.position.z-playerPos.z) < 2.2) show = true; }
-  document.getElementById('prompt').style.display = show ? 'block' : 'none';
-}
-setInterval(updatePrompt, 250);
+ function updatePrompt(){
+   const playerPos = document.getElementById('player').object3D.position;
+   let show = false;
+   for(const c of Array.from(collRoot.children)){
+     const pos = c.object3D.position;
+     if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) < 1.6){ show = true; break; }
+   }
+   if(!show) for(const id of ['pond1','pond2']){
+     const p = document.getElementById(id);
+     if(Math.hypot(p.object3D.position.x-playerPos.x,p.object3D.position.z-playerPos.z) < 2){ show = true; break; }
+   }
+   if(!show){
+     const npc = document.getElementById('npc-group');
+     if(Math.hypot(npc.object3D.position.x-playerPos.x,npc.object3D.position.z-playerPos.z) < 2.2) show = true;
+   }
+   document.getElementById('prompt').style.display = show ? 'block' : 'none';
+ }
+ setInterval(updatePrompt, 250);
 
-/* -------------------------
-   Utility & initial render
+ /* -------------------------
+    Utility & initial render
    ------------------------- */
-function statusPulse(text){ statusEl.textContent = text; setTimeout(()=> statusEl.textContent = 'Idle', 2200); }
-function refreshUI(){ requestAnimationFrame(()=>{ hpBar.style.width = (state.hp/state.hpMax*100)+'%'; stamBar.style.width = (state.stamina/state.staminaMax*100)+'%'; manaBar.style.width = (state.mana/state.manaMax*100)+'%'; hpText.textContent = `${Math.round(state.hp)}/${state.hpMax}`; stamText.textContent = `${Math.round(state.stamina)}/${state.staminaMax}`; manaText.textContent = `${Math.round(state.mana)}/${state.manaMax}`; hydrationEl.textContent = `${Math.round(state.hydration)}%`; foodEl.textContent = `${Math.round(state.food)}%`; xpEl.textContent = state.xp; xpMaxEl.textContent = state.xpMax; lvlEl.textContent = state.level; questEl.textContent = state.quest; equippedEl.textContent = state.equipped||'None'; xp_small.textContent = state.xp; renderInventory(); renderCrafting(); updateEnemyCount(); }); }
+ function statusPulse(text){
+   statusEl.textContent = text;
+   setTimeout(()=> statusEl.textContent = 'Idle', 2200);
+ }
+ function refreshUI(){
+   requestAnimationFrame(()=>{
+     hpBar.style.width = (state.hp/state.hpMax*100)+'%';
+     stamBar.style.width = (state.stamina/state.staminaMax*100)+'%';
+     manaBar.style.width = (state.mana/state.manaMax*100)+'%';
+     hpText.textContent = `${Math.round(state.hp)}/${state.hpMax}`;
+     stamText.textContent = `${Math.round(state.stamina)}/${state.staminaMax}`;
+     manaText.textContent = `${Math.round(state.mana)}/${state.manaMax}`;
+     hydrationEl.textContent = `${Math.round(state.hydration)}%`;
+     foodEl.textContent = `${Math.round(state.food)}%`;
+     xpEl.textContent = state.xp; xpMaxEl.textContent = state.xpMax; lvlEl.textContent = state.level;
+     questEl.textContent = state.quest;
+     equippedEl.textContent = state.equipped||'None';
+     xp_small.textContent = state.xp;
+     renderInventory(); renderCrafting(); updateEnemyCount();
+   });
+ }
 
-/* Expose some for debugging */
-window.gstate = state;
-window.spawnCollectible = spawnCollectible;
-window.addXP = addXP;
+ /* Expose some for debugging */
+ window.gstate = state;
+ window.spawnCollectible = spawnCollectible;
+ window.addXP = addXP;
 
-/* Initial UI */
-renderInventory(); renderCrafting(); refreshUI();
+ /* Initial UI */
+ renderInventory(); renderCrafting(); refreshUI();
 
-console.info('Game loaded. Controls: WASD + mouse to look. Click to attack or Space. E to interact. Click scene to lock pointer.');
+ console.info('Game loaded. Controls: WASD + mouse to look. Click to attack or Space. E to interact. Click scene to lock pointer.');
 </script>
 </body>
 </html>
-
