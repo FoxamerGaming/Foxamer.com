@@ -402,7 +402,7 @@ function createEnemy(x,z){
 function spawnEnemySafe(){
   const playerPos = document.getElementById('player').object3D.position;
   let x,z,tries=0;
-  do { x = (Math.random()*20-10); z = (Math.random()*20-10); tries++; } while(Math.hypot(x-playerPos.x,z-playerPos.z) < 5 && tries < 30);
+  do { x = (Math.random()*30-10); z = (Math.random()*30-10); tries++; } while(Math.hypot(x-playerPos.x,z-playerPos.z) < 5 && tries < 30);
   createEnemy(x.toFixed(2), z.toFixed(2));
 }
 for(let i=0;i<5;i++) spawnEnemySafe();
