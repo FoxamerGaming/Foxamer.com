@@ -1,9 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Magic Survival — Upgraded NPC Interaction & Controlled Items</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+<style>
+  /* ... (existing styles) ... */
+</style>
+</head>
+<body>
+<div id="ui-root">
+  <!-- ... (existing UI elements) ... -->
+  <a-entity id="npc-group" position="0 0 -4">
+    <a-box id="npc" color="#FFD700" position="0 1 0" depth="0.6" height="2" width="1.2" class="clickable" shadow="cast:true"></a-box>
+    <a-text value="Forest Elder (G to talk)" position="-1.6 2.6 0" color="#fff" align="center"></a-text>
+  </a-entity>
+  <!-- ... (rest of the existing UI elements) ... -->
+</div>
+<a-scene renderer="antialias:true; colorManagement:true" shadow="type:pcfsoft">
+  <!-- ... (rest of the existing A-frame scene) ... -->
+</a-scene>
+<script>
+  /* ... (existing JavaScript code) ... */
+
+  /* Interaction (G): pick up collectibles, pond water, NPC talk */
+  function interactNear() {
+    const playerPos = document.getElementById('player').object3D.position;
+    // collectibles (except sticks, rocks, mushrooms on ground)
+    for (const c of Array.from(collRoot.children)) {
+      if (['stick', 'rock', 'mushroom'].includes(c.__type)) continue;
+      const pos = c.object3D.position;
+      if (Math.hypot(pos.x - playerPos.x, pos.z - playerPos.z) < 1.6) {
+        state.inventory[c.__type] = (state.inventory[c.__type] || 0) + 1;
+        if (c.parentNode) c.parentNode.removeChild(c);
+        statusPulse('Picked up ' + c.__type);
+        refreshUI();
+        return;
+      }
+    }
+    // ponds
+    for (const id of ['pond1', 'pond2']) {
+      const p = document.getElementById(id);
+      const pos = p.object3D.position;
+      if (Math.hypot(pos.x - playerPos.x, pos.z - playerPos.z) < 2.0) {
+        state.inventory.water = (state.inventory.water || 0) + 1;
+        statusPulse('Filled water');
+        refreshUI();
+        return;
+      }
+    }
+    // NPC interaction with quest logic
+    const npcGroup = document.getElementById('npc-group');
+    const np = npcGroup.object3D.position;
+    if (Math.hypot(np.x - playerPos.x, np.z - playerPos.z) < 2.2) {
+      if (state.quest === 'Talk to the Forest Elder') {
+        state.quest = 'Collect 5 sticks for the Elder';
+        statusPulse('Quest started: Collect 5 sticks');
+      } else if (state.quest === 'Collect 5 sticks for the Elder') {
+        if ((state.inventory.stick || 0) >= 5) {
+          state.inventory.stick -= 5;
+          addXP(60);
+          state.quest = 'Complete! Elder teaches Fireball.';
+          if (!state.knownSpells.has('fireball')) {
+            state.knownSpells.add('fireball');
+            state.spells.push({ id: 'fireball', name: 'Fireball', charges: 2, max: 2, dmg: 35, cost: 15 });
+            statusPulse('Quest complete! Learned Fireball');
+          }
+          refreshUI();
+        } else {
+          statusPulse('You need 5 sticks');
+        }
+      } else {
+        statusPulse('The Elder nods.');
+      }
+      refreshUI();
+      return;
+    }
+    statusPulse('Nothing to interact');
+  }
+
+  // This handles the 'G' key press to trigger the interaction
+  document.addEventListener('keydown', g => {
+    if (e.key.toLowerCase() === 'g') {
+      interactNear();
+    }
+  });
+ /* ... (rest of the existing JavaScript code) ... */
+</script>
+</body>
+</html>
 
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>Magic Survival — Mouse Look & Item Pickup Integrated</title>
+<title>Magic Survival — Upgraded NPC Interaction & Controlled Items</title>
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
 <style>
@@ -121,7 +213,7 @@
    <!-- NPC group -->
    <a-entity id="npc-group" position="0 0 -4">
      <a-box id="npc" color="#FFD700" position="0 1 0" depth="0.6" height="2" width="1.2" class="clickable" shadow="cast:true"></a-box>
-     <a-text value="Forest Elder (E to talk)" position="-1.6 2.6 0" color="#fff" align="center"></a-text>
+     <a-text value="Forest Elder (G to talk)" position="-1.6 2.6 0" color="#fff" align="center"></a-text>
    </a-entity>
    <!-- containers -->
    <a-entity id="trees"></a-entity>
@@ -168,6 +260,9 @@
  const bouldersRoot = document.getElementById('boulders');
  const collRoot = document.getElementById('collectibles');
 
+ /* -------------------------
+    UI helpers bindings
+   ------------------------- */
  const $ = s => document.querySelector(s);
  const hpBar = $('#hpBar'), stamBar = $('#stamBar'), manaBar = $('#manaBar');
  const hpText = $('#hpText'), stamText = $('#stamText'), manaText = $('#manaText');
@@ -194,32 +289,340 @@
  }
  refreshUI();
 
- function statusPulse(text){
-   statusEl.textContent = text;
-   clearTimeout(statusPulse.timeoutId);
-   statusPulse.timeoutId = setTimeout(() => statusEl.textContent = 'Idle', 2200);
+ /* -------------------------
+    Inventory / Crafting / Hotbar
+   ------------------------- */
+ const hotbarItems = document.querySelectorAll('.hotbar-item');
+ hotbarItems.forEach((el,i)=>el.addEventListener('click', ()=> {
+   const item = el.dataset.item;
+   if(item){ state.equipped = item; statusPulse('Equipped: '+item); refreshUI(); }
+ }));
+ document.addEventListener('keydown', e=>{
+   const k = parseInt(e.key,10);
+   if(k>=1 && k<=hotbarItems.length) hotbarItems[k-1].click();
+ });
+
+ $('#more-btn').onclick = ()=>$('#backpack').classList.add('open');
+ $('#close-bp').onclick = ()=>$('#backpack').classList.remove('open');
+
+ function iconFor(id){
+   const map = {
+     'stick':'https://media.sketchfab.com/models/2ba760f5cbd04b3987b84f81e96b535a/thumbnails/8d25bd62ead6468c8b86547ef6302bb7/8d577e6c35514084a58d43b26a32b7ef.jpeg',
+     'rock':'https://static.turbosquid.com/Preview/2016/02/14__08_36_36/1.png3ad48818-5004-478e-b81f-3bf514b39787Original.jpg',
+     'mushroom':'https://cdn-icons-png.flaticon.com/512/590/590685.png',
+     'potion':'https://tse4.mm.bing.net/th/id/OIP.ih2nf3-w5dOUrKWdnNBeHAHaHa?r=0&rs=1&pid=ImgDetMain&o=7&rm=3',
+     'water':'https://img-new.cgtrader.com/items/4178840/01789bd107/large/water-bottle-3d-model-01789bd107.jpg',
+     'wood-staff':'https://tse2.mm.bing.net/th/id/OIP.Z1VPKGwjqXxRVI-40zPQ7AHaJD?r=0&rs=1&pid=ImgDetMain&o=7&rm=3',
+     'stone-axe':'https://tse1.mm.bing.net/th/id/OIP.fDqfUYYaTknffHzcDrsd5gHaFc?r=0&rs=1&pid=ImgDetMain&o=7&rm=3'
+   };
+   return map[id] || map['stick'];
  }
 
- /* -- Inventory, crafting, environment, enemies, combat etc. (your existing code here, unchanged) -- */
+ function renderInventory(){
+   const invGrid = $('#inv-grid'); if(!invGrid) return;
+   invGrid.innerHTML = '';
+   Object.keys(state.inventory).forEach(k=>{
+     const qty = state.inventory[k]||0;
+     if(qty === 0) return;
+     const slot = document.createElement('div'); slot.className='slot';
+     slot.innerHTML = `<img src="${iconFor(k)}" style="width:40px;height:40px"><div class="qty">x${qty}</div>`;
+     slot.addEventListener('click', ()=>{
+       if((k==='stone-axe' || k==='wood-staff') && qty>0){ state.equipped = k; statusPulse('Equipped: '+k); }
+       if(k==='potion' && qty>0){ state.inventory.potion--; state.hp = Math.min(state.hp + 40, state.hpMax); statusPulse('Used potion +40 HP'); }
+       refreshUI();
+     });
+     invGrid.appendChild(slot);
+   });
+ }
 
- // NPC interaction as per your snippet:
+ function renderCrafting(){
+   const craftList = $('#craft-list'); craftList.innerHTML = '';
+   recipes.forEach(rc=>{
+     const row = document.createElement('div'); row.style.display='flex';row.style.justifyContent='space-between';row.style.alignItems='center';row.style.padding='6px 0';row.style.borderBottom='1px dashed rgba(255,255,255,0.03)';
+     const left = document.createElement('div'); left.innerHTML = `<div style="font-weight:600">${rc.name}<br>${Object.entries(rc.need).map(([k,v])=>v+'× '+k).join(', ')}</div>`;
+     const btn = document.createElement('button'); btn.textContent='Craft';
+     btn.disabled = !Object.entries(rc.need).every(([k,v]) => (state.inventory[k]||0) >= v);
+     btn.onclick = ()=>{
+       Object.entries(rc.need).forEach(([k,v])=> state.inventory[k]-=v);
+       state.inventory[rc.id] = (state.inventory[rc.id]||0) + 1;
+       if(rc.id==='fireball' && !state.knownSpells.has('fireball')){ 
+         state.knownSpells.add('fireball'); 
+         state.spells.push({id:'fireball',name:'Fireball',charges:2,max:2,dmg:35,cost:15}); 
+         statusPulse('Learned Fireball'); 
+       }
+       statusPulse(rc.name + ' crafted');
+       refreshUI();
+     };
+     row.appendChild(left); row.appendChild(btn); craftList.appendChild(row);
+   });
+ }
+
+ /* -------------------------
+    Environment: trees + boulders (minable)
+   ------------------------- */
+ function spawnTree(x,z, hp=30){
+   const ent = document.createElement('a-entity');
+   ent.setAttribute('position', `${x} 0 ${z}`);
+   const trunk = document.createElement('a-cylinder'); 
+   trunk.setAttribute('height','2'); 
+   trunk.setAttribute('radius','0.25'); 
+   trunk.setAttribute('color','#8B5A2B'); 
+   trunk.setAttribute('position','0 1 0'); 
+   trunk.setAttribute('material','src:#bark; roughness:1');
+   const crown = document.createElement('a-sphere'); 
+   crown.setAttribute('radius','1.1'); 
+   crown.setAttribute('position','0 2.1 0'); 
+   crown.setAttribute('color','#0b6b2e');
+   ent.appendChild(trunk); ent.appendChild(crown);
+   ent.classList.add('tree');
+   ent.__data = { hp: hp };
+   ent.addEventListener('click', ()=> {
+     chopEntity(ent, 'tree');
+   });
+   treesRoot.appendChild(ent);
+ }
+ function spawnBoulder(x,z, hp=40){
+   const e = document.createElement('a-entity');
+   e.setAttribute('position', `${x} 0 ${z}`);
+   const rock = document.createElement('a-sphere'); 
+   rock.setAttribute('radius','0.6'); 
+   rock.setAttribute('color','#777'); 
+   rock.setAttribute('position','0 0.6 0');
+   e.appendChild(rock);
+   e.classList.add('boulder');
+   e.__data = { hp: hp };
+   e.addEventListener('click', ()=> { chopEntity(e, 'boulder'); });
+   bouldersRoot.appendChild(e);
+ }
+
+ function chopEntity(ent, type){
+   const tool = state.equipped;
+   const power = (tool === 'stone-axe') ? 12 : (tool === 'wood-staff' ? 3 : 4);
+   ent.__data.hp -= power;
+   statusPulse(`${type} hit -${power}`);
+   if(ent.__data.hp <= 0){
+     // Remove spawning sticks, rocks, mushrooms on chopping trees/boulders
+     if(ent.parentNode) ent.parentNode.removeChild(ent);
+   }
+ }
+
+ /* seed environment (near player) */
+ for(let i=0;i<12;i++) spawnTree((Math.random()*16-8).toFixed(2), (Math.random()*16-8).toFixed(2));
+ for(let i=0;i<8;i++) spawnBoulder((Math.random()*16-8).toFixed(2), (Math.random()*16-8).toFixed(2));
+
+ /* -------------------------
+    Collectibles spawn + pickup (only non-stick/rock/mushroom on ground)
+   ------------------------- */
+ function spawnCollectible(type, pos){
+   if(type === 'stick' || type === 'rock' || type === 'mushroom') return; // skip these on ground spawns
+
+   const e = document.createElement('a-entity'); 
+   e.setAttribute('position', `${pos.x} 0 ${pos.z}`);
+   e.__type = type;
+
+   if(type==='potion') e.innerHTML = `<a-cylinder color="#d45e5e" height="0.5" radius="0.15" position="0 0.25 0"></a-cylinder>`;
+   else if(type==='water') e.innerHTML = `<a-cylinder color="#3bb4ff" height="0.8" radius="0.2" position="0 0.4 0"></a-cylinder>`;
+   else e.innerHTML = `<a-box color="#888" depth="0.3" height="0.3" width="0.3" position="0 0.15 0"></a-box>`;
+
+   e.classList.add('collectible','clickable');
+   e.addEventListener('click', ()=> {
+     state.inventory[type] = (state.inventory[type]||0)+1;
+     if(e.parentNode) e.parentNode.removeChild(e);
+     statusPulse('Picked up ' + type);
+     refreshUI();
+   });
+   collRoot.appendChild(e);
+ }
+
+ /* -------------------------
+    Enemies spawn with faces + HP bar; aggro only when provoked
+   ------------------------- */
+ function createEnemy(x,z){
+   const e = document.createElement('a-entity'); e.setAttribute('position', `${x} 0.5 ${z}`);
+   const body = document.createElement('a-sphere'); body.setAttribute('radius','0.5'); body.setAttribute('color','#ff5c5c'); body.setAttribute('shadow','cast:true');
+   const eyeL = document.createElement('a-sphere'); eyeL.setAttribute('radius','0.07'); eyeL.setAttribute('color','#fff'); eyeL.setAttribute('position','-0.15 0.12 0.45');
+   const eyeR = document.createElement('a-sphere'); eyeR.setAttribute('radius','0.07'); eyeR.setAttribute('color','#fff'); eyeR.setAttribute('position','0.15 0.12 0.45');
+   const pupilL = document.createElement('a-sphere'); pupilL.setAttribute('radius','0.03'); pupilL.setAttribute('color','#000'); pupilL.setAttribute('position','-0.15 0.12 0.52');
+   const pupilR = document.createElement('a-sphere'); pupilR.setAttribute('radius','0.03'); pupilR.setAttribute('color','#000'); pupilR.setAttribute('position','0.15 0.12 0.52');
+   const hpText = document.createElement('a-text'); hpText.setAttribute('value','HP: 60'); hpText.setAttribute('position','0 1 0'); hpText.setAttribute('align','center'); hpText.setAttribute('color','#fff'); hpText.setAttribute('scale','1.2 1.2 1.2');
+
+   e.appendChild(body); e.appendChild(eyeL); e.appendChild(eyeR); e.appendChild(pupilL); e.appendChild(pupilR); e.appendChild(hpText);
+   e.classList.add('enemy','clickable');
+   e.__data = { hp: 60, alive: true, aggro: false, vx:0, vz:0, hpText: hpText, respawning:false, cooldown:0 };
+   e.addEventListener('click', ()=> { e.__data.aggro = true; statusPulse('You provoked an enemy'); });
+   enemiesRoot.appendChild(e);
+   return e;
+ }
+
+ function spawnEnemySafe(){
+   const playerPos = document.getElementById('player').object3D.position;
+   let x,z,tries=0;
+   do { x = (Math.random()*30-10); z = (Math.random()*30-10); tries++; } while(Math.hypot(x-playerPos.x,z-playerPos.z) < 5 && tries < 30);
+   createEnemy(x.toFixed(2), z.toFixed(2));
+ }
+ for(let i=0;i<5;i++) spawnEnemySafe();
+ updateEnemyCount();
+
+ function updateEnemyCount(){ $('#enemyCount').textContent = enemiesRoot.querySelectorAll('.enemy').length; }
+
+ /* Enemy AI loop */
+ let lastTime = performance.now();
+ function enemyLoop(now){
+   const dt = (now - lastTime) / 1000; lastTime = now;
+   const playerPos = document.getElementById('player').object3D.position;
+   const all = Array.from(enemiesRoot.children);
+   all.forEach(e=>{
+     if(!e.__data || !e.__data.alive) return;
+     const pos = e.object3D.position;
+     if(e.__data.aggro){
+       const dx = playerPos.x - pos.x, dz = playerPos.z - pos.z; const dist = Math.hypot(dx,dz);
+       const len = Math.max(dist,0.001);
+       const speed = 1.0;
+       e.__data.vx = (dx/len)*speed;
+       e.__data.vz = (dz/len)*speed;
+       pos.x += e.__data.vx * dt; pos.z += e.__data.vz * dt;
+       e.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+       if(dist < 1.0 && e.__data.cooldown <= 0){
+         damagePlayer(6 + Math.random()*3);
+         e.__data.cooldown = 0.9;
+       }
+     } else {
+       if(Math.random() < 0.002){ e.__data.vx += (Math.random()-0.5)*0.4; e.__data.vz += (Math.random()-0.5)*0.4; }
+       e.__data.vx *= 0.98; e.__data.vz *= 0.98;
+       pos.x += e.__data.vx * dt; pos.z += e.__data.vz * dt;
+       e.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+     }
+     if(e.__data.cooldown > 0) e.__data.cooldown -= dt;
+     e.__data.hpText.setAttribute('value', `HP: ${Math.max(0, Math.round(e.__data.hp))}`);
+     if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) > 70 && !e.__data.respawning){
+       if(e.parentNode) e.parentNode.removeChild(e);
+     }
+   });
+   if(enemiesRoot.children.length < MAX_ENEMIES){
+     spawnEnemySafe();
+     updateEnemyCount();
+   }
+   requestAnimationFrame(enemyLoop);
+ }
+ requestAnimationFrame(enemyLoop);
+
+ /* Combat and enemy death */
+ const cameraEl = document.querySelector('#camera');
+ function raycastAttack(range=6){
+   const cam = cameraEl.object3D;
+   const origin = new AFRAME.THREE.Vector3(); origin.setFromMatrixPosition(cam.matrixWorld);
+   const dir = new AFRAME.THREE.Vector3(0,0,-1).applyQuaternion(cam.quaternion).normalize();
+   const ray = new AFRAME.THREE.Raycaster(origin, dir, 0, range);
+   const enemyObjs = Array.from(enemiesRoot.children).map(n=>n.object3D);
+   const intersects = ray.intersectObjects(enemyObjs, true);
+   if(intersects.length){
+     let hit = intersects[0].object; let ent = null;
+     while(hit && !ent){
+       if(hit.el && hit.el.classList && hit.el.classList.contains('enemy')) ent = hit.el;
+       hit = hit.parent;
+     }
+     if(ent){
+       let dmg = 6;
+       if(state.equipped === 'stone-axe') dmg = 28;
+       else if(state.equipped === 'wood-staff') dmg = 18;
+       const spark = state.spells.find(s=>s.id==='spark');
+       if(spark && spark.charges > 0 && state.mana >= spark.cost){
+         spark.charges--; state.mana = Math.max(0, state.mana - spark.cost); dmg += spark.dmg;
+       }
+       ent.__data.hp -= dmg;
+       ent.__data.aggro = true;
+       statusPulse('Hit enemy -' + Math.round(dmg));
+       if(ent.__data.hp <= 0 && ent.__data.alive){
+         ent.__data.alive = false;
+         ent.setAttribute('opacity','0.6'); ent.setAttribute('color','#333');
+         // Spawn sticks, rocks, mushrooms ONLY on enemy death
+         const lootTypes = ['stick','rock','mushroom'];
+         lootTypes.forEach(type => {
+           if(Math.random() < 0.6){
+             const count = Math.floor(Math.random() * 2) + 1;
+             for(let i=0; i<count; i++){
+               spawnCollectibleEnemyDrop(type, {
+                 x: ent.object3D.position.x + (Math.random()-0.5),
+                 z: ent.object3D.position.z + (Math.random()-0.5)
+               });
+             }
+           }
+         });
+         addXP(25);
+         setTimeout(()=>{ if(ent.parentNode) ent.parentNode.removeChild(ent); }, 3000);
+         setTimeout(()=> spawnEnemySafe(), 120000);
+         updateEnemyCount();
+       }
+       refreshUI();
+       return true;
+     }
+   }
+   statusPulse('Missed');
+   return false;
+ }
+ document.addEventListener('mousedown', (e)=>{ if(e.button === 0) raycastAttack(); });
+ document.addEventListener('keydown', e=>{
+   if(e.code === 'Space'){ e.preventDefault(); raycastAttack(); }
+ });
+
+ // Spawn collectibles dropped by enemies (pickups)
+ function spawnCollectibleEnemyDrop(type, pos){
+   const e = document.createElement('a-entity'); 
+   e.setAttribute('position', `${pos.x} 0 ${pos.z}`);
+   e.__type = type;
+   if(type==='stick') e.innerHTML = `<a-cylinder color="#7a522a" height="0.6" radius="0.05" position="0 0.3 0"></a-cylinder>`;
+   else if(type==='rock') e.innerHTML = `<a-sphere color="#777" radius="0.22" position="0 0.22 0"></a-sphere>`;
+   else if(type==='mushroom') e.innerHTML = `<a-cylinder color="#cfa07f" height="0.18" radius="0.05" position="0 0.09 0"></a-cylinder><a-sphere color="#ff3154" radius="0.15" position="0 0.22 0"></a-sphere>`;
+   else return;
+   e.classList.add('collectible','clickable');
+   e.addEventListener('click', ()=> {
+     state.inventory[type] = (state.inventory[type]||0)+1;
+     if(e.parentNode) e.parentNode.removeChild(e);
+     statusPulse('Picked up ' + type);
+     refreshUI();
+   });
+   collRoot.appendChild(e);
+ }
+
+ /* Interaction (E): pick up collectibles, pond water, NPC talk */
  function interactNear(){
    const playerPos = document.getElementById('player').object3D.position;
+   // collectibles (except sticks, rocks, mushrooms on ground)
+   for(const c of Array.from(collRoot.children)){
+     if(['stick','rock','mushroom'].includes(c.__type)) continue;
+     const pos = c.object3D.position;
+     if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) < 1.6){
+       state.inventory[c.__type] = (state.inventory[c.__type]||0)+1;
+       if(c.parentNode) c.parentNode.removeChild(c);
+       statusPulse('Picked up ' + c.__type); refreshUI();
+       return;
+     }
+   }
+   // ponds
+   for(const id of ['pond1','pond2']){
+     const p = document.getElementById(id);
+     const pos = p.object3D.position;
+     if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) < 2.0){
+       state.inventory.water = (state.inventory.water||0) + 1; statusPulse('Filled water'); refreshUI();
+       return;
+     }
+   }
+   // NPC interaction with quest logic
    const npcGroup = document.getElementById('npc-group');
    const np = npcGroup.object3D.position;
-   if(Math.hypot(np.x - playerPos.x, np.z - playerPos.z) < 2.2){
+   if(Math.hypot(np.x-playerPos.x,np.z-playerPos.z) < 2.2){
      if(state.quest === 'Talk to the Forest Elder'){
        state.quest = 'Collect 5 sticks for the Elder';
        statusPulse('Quest started: Collect 5 sticks');
      }
      else if(state.quest === 'Collect 5 sticks for the Elder'){
-       if((state.inventory.stick || 0) >= 5){
+       if((state.inventory.stick||0) >= 5){
          state.inventory.stick -= 5;
          addXP(60);
          state.quest = 'Complete! Elder teaches Fireball.';
          if(!state.knownSpells.has('fireball')){
            state.knownSpells.add('fireball');
-           state.spells.push({id:'fireball', name:'Fireball', charges:2, max:2, dmg:35, cost:15});
+           state.spells.push({id:'fireball',name:'Fireball',charges:2,max:2,dmg:35,cost:15});
            statusPulse('Quest complete! Learned Fireball');
          }
          refreshUI();
@@ -232,70 +635,87 @@
      refreshUI();
      return;
    }
-   // Also pick up collectible items near player on 'E':
-   for(const c of Array.from(collRoot.children)){
-     const pos = c.object3D.position;
-     if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) < 1.6){
-       state.inventory[c.__type] = (state.inventory[c.__type]||0)+1;
-       if(c.parentNode) c.parentNode.removeChild(c);
-       statusPulse('Picked up ' + c.__type);
-       refreshUI();
-       return;
-     }
-   }
-   // Pond water pickup
-   for(const id of ['pond1','pond2']){
-     const p = document.getElementById(id);
-     const pos = p.object3D.position;
-     if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) < 2){
-       state.inventory.water = (state.inventory.water||0) + 1;
-       statusPulse('Filled water');
-       refreshUI();
-       return;
-     }
-   }
    statusPulse('Nothing to interact');
  }
  document.addEventListener('keydown', e=>{ if(e.key.toLowerCase() === 'e') interactNear(); });
 
+ /* XP / leveling */
+ function addXP(v){
+   state.xp += v;
+   while(state.xp >= state.xpMax){
+     state.xp -= state.xpMax; state.level++; state.xpMax = Math.floor(state.xpMax * 1.25);
+     state.hpMax += 8; state.staminaMax += 6; state.manaMax += 6;
+     state.hp = state.hpMax; state.stamina = state.staminaMax; state.mana = state.manaMax;
+     statusPulse('Level up!');
+   }
+   refreshUI();
+ }
+
+ /* Damage / die / respawn */
+ function damagePlayer(amount){
+   if(state.hp <= 0) return;
+   state.hp = Math.max(0, state.hp - amount);
+   document.getElementById('damage-flash').style.opacity = 1; setTimeout(()=>document.getElementById('damage-flash').style.opacity = 0, 180);
+   refreshUI();
+   if(state.hp <= 0){ statusPulse('You died. Respawning...'); disableControls(); setTimeout(respawnPlayer, 4000); }
+ }
+ function disableControls(){
+   const cam = document.getElementById('camera');
+   cam.components['look-controls']?.pause();
+   cam.components['wasd-controls']?.pause();
+ }
+ function respawnPlayer(){
+   const player = document.getElementById('player');
+   player.setAttribute('position','0 1.6 0');
+   state.hp = state.hpMax; state.stamina = state.staminaMax; state.mana = state.manaMax;
+   state.hydration = 100; state.food = 100;
+   document.getElementById('camera').components['look-controls']?.play();
+   document.getElementById('camera').components['wasd-controls']?.play();
+   statusPulse('You respawned'); refreshUI();
+ }
+
+ /* Passive ticks */
+ setInterval(()=>{
+   state.mana = Math.min(state.manaMax, state.mana + 0.3);
+   state.spells.forEach(s=>{ if(s.charges < s.max && Math.random() < 0.04) s.charges++; });
+   state.food = Math.max(0, state.food - 0.01);
+   state.hydration = Math.max(0, state.hydration - 0.01);
+   if(state.food <= 0 || state.hydration <= 0) state.hp = Math.max(0, state.hp - 0.03);
+   refreshUI();
+ }, 1000);
+
+ /* Prompt when near interactions */
  function updatePrompt(){
    const playerPos = document.getElementById('player').object3D.position;
    let show = false;
-   const npc = document.getElementById('npc-group');
-   if(Math.hypot(npc.object3D.position.x - playerPos.x, npc.object3D.position.z - playerPos.z) < 2.2){
-     show = true;
-   }
    for(const c of Array.from(collRoot.children)){
      const pos = c.object3D.position;
-     if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) < 1.6){
-       show = true;
-       break;
-     }
+     if(Math.hypot(pos.x-playerPos.x,pos.z-playerPos.z) < 1.6){ show = true; break; }
+   }
+   if(!show) for(const id of ['pond1','pond2']){
+     const p = document.getElementById(id);
+     if(Math.hypot(p.object3D.position.x-playerPos.x,p.object3D.position.z-playerPos.z) < 2){ show = true; break; }
    }
    if(!show){
-     for(const id of ['pond1','pond2']){
-       const p = document.getElementById(id);
-       if(Math.hypot(p.object3D.position.x-playerPos.x,p.object3D.position.z-playerPos.z) < 2){
-         show = true;
-         break;
-       }
-     }
+     const npc = document.getElementById('npc-group');
+     if(Math.hypot(npc.object3D.position.x-playerPos.x,npc.object3D.position.z-playerPos.z) < 2.2) show = true;
    }
    document.getElementById('prompt').style.display = show ? 'block' : 'none';
  }
  setInterval(updatePrompt, 250);
 
- // Enable pointer lock on click for mouse look
- const sceneEl = document.querySelector('a-scene');
- sceneEl.addEventListener('click', () => {
-   if (!document.pointerLockElement) {
-     sceneEl.requestPointerLock = sceneEl.requestPointerLock || sceneEl.mozRequestPointerLock || sceneEl.webkitRequestPointerLock;
-     if(sceneEl.requestPointerLock) sceneEl.requestPointerLock();
-   }
- });
+ /* Utility & initial render */
+ function statusPulse(text){
+   statusEl.textContent = text;
+   setTimeout(()=> statusEl.textContent = 'Idle', 2200);
+ }
 
- // Your entire other code for enemies, combat, environment, XP, damage, etc., remains unchanged.
- // (Please insert your full original code here as it is.)
+ /* Expose some for debugging */
+ window.gstate = state;
+ window.spawnCollectible = spawnCollectible;
+ window.addXP = addXP;
+
+ renderInventory(); renderCrafting(); refreshUI();
 
  console.info('Game loaded. Controls: WASD + mouse to look. Click to attack or Space. E to interact. Click scene to lock pointer.');
 </script>
