@@ -42,7 +42,7 @@
   /* State, prompt, damage flash */
   #upgrades{position:absolute;left:12px;bottom:14px;background:rgba(0,0,0,0.6);padding:8px;border-radius:10px;border:1px solid rgba(255,255,255,0.05);z-index:10000;color:#fff}
   #state{position:absolute;right:12px;top:12px;background:rgba(0,0,0,0.6);padding:10px;border-radius:10px;color:#fff;border:1px solid rgba(255,255,255,0.06);z-index:10000;width:260px}
-  #damage-flash{position:absolute;inset:0;background:rgba(255,0,0,0.12);opacity:0;pointer-events:none;transition:opacity .15s;z-index:10005}
+  #damage-flash{position:absolute; inset:0;background:rgba(255,0,0,0.12);opacity:0;pointer-events:none;transition:opacity .15s;z-index:10005}
   #prompt{position:absolute;left:50%;top:64%;transform:translateX(-50%);background:rgba(0,0,0,0.6);color:#fff;padding:6px 10px;border-radius:8px;z-index:10005;display:none}
 
   /* Info box (bottom-right) */
@@ -51,7 +51,7 @@
   .muted{opacity:.85}
 
   /* Intro overlay */
-  #intro{position:absolute;inset:0;background:radial-gradient(ellipse at center, rgba(0,0,0,.75), rgba(0,0,0,.95));display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;z-index:10050}
+  #intro{position:absolute; inset:0;background:radial-gradient(ellipse at center, rgba(0,0,0,.75), rgba(0,0,0,.95));display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;z-index:10050}
   #intro h1{font-size:42px;margin:0 0 8px 0;letter-spacing:1px}
   #intro p{max-width:680px;text-align:center;margin:0 0 16px 0;opacity:.9}
   #start-btn{padding:10px 18px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:#fff;font-weight:700;cursor:pointer}
@@ -205,14 +205,15 @@ const state = {
   spells:[{id:'spark',name:'Spark',charges:0,max:3,dmg:15,cost:5}],
   knownSpells:new Set(['spark']),
   quest:'Talk to the Forest Elder',
-  inventory:{ stick:0, rock:0, mushroom:0, potion:0, water:0, 'wood-staff':0, 'stone-axe':0 }
+  inventory:{ stick:0, rock:0, mushroom:0, potion:0, water:0, 'wood-staff':0, 'stone-axe':0, planks:0 } // Added 'planks' to inventory
 };
 
 const recipes = [
   {id:'stone-axe', name:'Stone Axe', icon:'stone-axe', need:{stick:2,rock:1}, desc:'Lets you chop trees & mine rocks.'},
   {id:'wood-staff', name:'Wood Staff', icon:'wood-staff', need:{stick:3}, desc:'Basic staff — improves spell damage.'},
   {id:'potion', name:'Healing Potion', icon:'potion', need:{mushroom:2,water:1}, desc:'Restores 40 HP.'},
-  {id:'fireball', name:'Spell: Fireball', icon:'fireball', need:{mushroom:1,stick:1}, desc:'Unlocks Fireball spell.'}
+  {id:'fireball', name:'Spell: Fireball', icon:'fireball', need:{mushroom:1,stick:1}, desc:'Unlocks Fireball spell.'},
+  {id:'planks', name:'Planks', icon:'stick', need:{stick:2}, desc:'Useful for crafting.'} // Planks recipe
 ];
 
 const CONFIG = {
@@ -224,7 +225,11 @@ const CONFIG = {
   CLIMB_DRAIN: 16,          // stamina/sec during climb
   ENEMY_WALK: 1.2,          // enemy speed (tiny bump)
   ENEMY_AGGRO_ONLY_WHEN_ATTACKED: true,
-  ENEMY_MIN_SPAWN_DIST: 14  // meters from player
+  ENEMY_MIN_SPAWN_DIST: 14,  // meters from player
+  TREE_CHOP_DAMAGE: 12, // Damage dealt to tree per hit
+  TREE_HP: 30,         // Max HP of a tree
+  MINING_ROCK_DAMAGE: 10, // Damage dealt to rock per hit
+  MINING_ROCK_HP: 40      // Max HP of a rock
 };
 
 let gameStarted = false;
@@ -249,7 +254,8 @@ function iconFor(id){
     'water':'https://media.sketchfab.com/models/f51306c13cd14d38bdcd7a31d8804bfb/thumbnails/e677993f89204511963ca6cfa3eaf6b3/aafc8cf3987e41e1ad44f68e9f2fb378.jpeg',
     'wood-staff':'https://img1.cgtrader.com/items/654454/91e44bd851/low-poly-swirly-mage-staff-3d-model-low-poly-rigged-fbx-blend.png',
     'stone-axe':'https://tse1.mm.bing.net/th/id/OIP.fDqfUYYaTknffHzcDrsd5gHaFc?r=0&rs=1&pid=ImgDetMain&o=7&rm=3',
-    'fireball':'https://static.vecteezy.com/system/resources/thumbnails/021/698/212/small_2x/ball-of-fire-glowing-magma-sphere-fireball-large-sphere-of-red-energy-fantasy-game-spell-icon-generative-ai-png.png'
+    'fireball':'https://static.vecteezy.com/system/resources/thumbnails/021/698/212/small_2x/ball-of-fire-glowing-magma-sphere-fireball-large-sphere-of-red-energy-fantasy-game-spell-icon-generative-ai-png.png',
+    'planks':'https://img.freepik.com/premium-vector/wooden-plank-icon_778687-292.jpg' // Placeholder for planks icon
   };
   return map[id]||map['stick'];
 }
@@ -293,7 +299,7 @@ document.querySelectorAll('.hotbar-item').forEach(el=>{
     else statusPulse('You don’t own that yet');
   });
 });
-document.addEventListener('keydown', e=>{
+document.addEventListener('keydown',e=>{
   if(!gameStarted) return;
   if(e.key==='1') document.querySelector('.hotbar-item[data-item="stone-axe"]').click();
   if(e.key==='2') document.querySelector('.hotbar-item[data-item="wood-staff"]').click();
@@ -308,6 +314,21 @@ function renderInventory(){
     slot.onclick=()=>{
       if(k==='potion'){ state.inventory.potion--; state.hp=Math.min(state.hp+40,state.hpMax); statusPulse('Used potion +40 HP'); }
       if(k==='wood-staff'||k==='stone-axe'){ state.equipped=k; statusPulse('Equipped '+(k==='wood-staff'?'Wood Staff':'Stone Axe')); }
+      if(k==='planks'){ // Example of using planks
+        if(state.equipped==='wood-staff'){ // Example: use planks to upgrade staff
+            if(state.inventory.planks >= 5){
+                state.inventory.planks -= 5;
+                state.manaMax += 10;
+                state.mana = state.manaMax;
+                statusPulse('Staff upgraded!'); info('Staff upgraded, mana increased.');
+                refreshUI();
+            } else {
+                statusPulse('Not enough planks for staff upgrade.');
+            }
+        } else {
+            statusPulse('Equip Wood Staff to upgrade.');
+        }
+      }
       refreshUI();
     };
     invGrid.appendChild(slot);
@@ -537,7 +558,8 @@ function attack(range=2.2){
   statusPulse('Hit enemy -'+Math.round(dmg));
   if(ent.__data.hp<=0 && ent.__data.alive){
     ent.__data.alive=false; setTimeout(()=>ent.parentNode&&ent.parentNode.removeChild(ent),500);
-    updateEnemyCount(); addXP(20);
+    updateEnemyCount();
+    addXP(20); // <-- XP GAINED HERE
     ['stick','rock','mushroom'].forEach(t=>{ if(Math.random()<0.5) spawnCollectible(t,{x:ent.object3D.position.x+(Math.random()-.5),z:ent.object3D.position.z+(Math.random()-.5)}); });
   }
 }
