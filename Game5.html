@@ -436,6 +436,7 @@ function refreshUI(){
   document.getElementById('level').textContent=state.level;
   document.getElementById('quest').textContent=state.quest;
   document.getElementById('equipped').textContent=state.equipped? (state.equipped==='wood-staff'?'Wood Staff':'Stone Axe') : 'None';
+  document.getElementById('xp_small').textContent = state.xp; // Update the small XP display
   updateRubyBar();
   updateEnemyCount();
 }
@@ -601,8 +602,8 @@ function interactTalk(){
   const shopHouse = document.querySelector('#shop-house').object3D.position;
   // Forest Elder
   if(Math.hypot(elder.x-p.x,elder.z-p.z)<2.2){
-    if(state.quest==='Talk to the Forest Elder'){ 
-      state.quest='Collect 5 sticks for the Elder'; 
+    if(state.quest==='Talk to the Forest Elder'){
+      state.quest='Collect 5 sticks for the Elder';
     }else if(state.quest==='Collect 5 sticks for the Elder'){
       if((state.inventory.stick||0)>=5){
         state.inventory.stick-=5; state.quest='Complete! Elder teaches Fireball.';
@@ -702,6 +703,32 @@ document.addEventListener('keydown',e=>{
   if(e.key.toLowerCase()==='e') interactPickup();
   if(e.key.toLowerCase()==='g') interactTalk();
 });
+
+// ========== UPGRADE STATS LOGIC ==========
+function upgradeStat(statName, cost) {
+  if (state.xp >= cost) {
+    state.xp -= cost;
+    if (statName === 'hp') {
+      state.hpMax += 10;
+      state.hp = state.hpMax; // Restore to full health
+    } else if (statName === 'stamina') {
+      state.staminaMax += 5;
+      state.stamina = state.staminaMax; // Restore to full stamina
+    } else if (statName === 'mana') {
+      state.manaMax += 8;
+      state.mana = state.manaMax; // Restore to full mana
+    }
+    refreshUI(); // Update the UI to reflect changes
+  } else {
+    showPrompt("Not enough XP to upgrade!"); // Provide feedback to the player
+  }
+}
+
+// Add event listeners to the upgrade buttons
+document.getElementById('up-hp').addEventListener('click', () => upgradeStat('hp', 50));
+document.getElementById('up-stam').addEventListener('click', () => upgradeStat('stamina', 30));
+document.getElementById('up-mana').addEventListener('click', () => upgradeStat('mana', 30));
+
 
 // ========== MISC ==========
 refreshUI();
