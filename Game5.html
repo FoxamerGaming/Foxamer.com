@@ -214,7 +214,6 @@ const recipes = [
   {id:'potion', name:'Healing Potion', icon:'potion', need:{mushroom:2,water:1}, desc:'Restores 40 HP.'},
   {id:'fireball', name:'Spell: Fireball', icon:'fireball', need:{mushroom:1,stick:1}, desc:'Unlocks Fireball spell.'},
   {id:'planks', name:'Planks', icon:'stick', need:{stick:2}, desc:'Useful for crafting.'},
-  // House recipe: requires planks
   {id:'house', name:'House (placeable)', icon:'house', need:{planks:20}, desc:'Craft a simple house that you can place.'}
 ];
 
@@ -427,13 +426,42 @@ for(let i=0;i<22;i++) spawnTree((Math.random()*80-40).toFixed(2),(Math.random()*
 for(let i=0;i<24;i++) spawnBush((Math.random()*80-40).toFixed(2),(Math.random()*60-30).toFixed(2));
 
 /* =========================
-   COLLECTIBLES (dynamic bodies with explicit shapes so they settle correctly)
-   Fix for "floating" items: give a collision shape (box/sphere) and damping.
+   COLLECTIBLES
+   Fix floating by snapping new items to ground BEFORE adding them.
+   We raycast down at spawn X/Z to find ground Y and place the entity so its bottom touches ground.
 ========================= */
 const collRoot=document.querySelector('#collectibles');
+
+function getGroundYAt(x,z){
+  // cast from a high Y downwards to find ground/static objects
+  const origin = new AFRAME.THREE.Vector3(x, 12, z); // 12m above
+  const dir = new AFRAME.THREE.Vector3(0, -1, 0);
+  const ray = new AFRAME.THREE.Raycaster(origin, dir, 0, 30);
+  // include ground and all static-body objects
+  const staticNodes = [...document.querySelectorAll('[static-body]')].map(n=>n.object3D);
+  const hits = ray.intersectObjects(staticNodes, true);
+  if(hits.length) return hits[0].point.y;
+  return 0; // fallback to zero
+}
+
 function spawnCollectible(type,pos){
-  const y = (pos.y!==undefined)? pos.y : 0.5;
-  const e=document.createElement('a-entity'); e.setAttribute('position',`${pos.x} ${y} ${pos.z}`); e.__type=type;
+  // determine half-height of visual so bottom sits on ground
+  const halfHeights = {
+    stick: 0.075,
+    rock: 0.22,
+    mushroom: 0.22,
+    potion: 0.25,
+    water: 0.4,
+    'stone-axe': 0.3,
+    'wood-staff': 0.6,
+    planks: 0.1
+  };
+  const half = halfHeights[type] || 0.18;
+  // compute ground Y at the spawn X,Z and set entity Y so bottom touches surface
+  const groundY = getGroundYAt(pos.x, pos.z);
+  const spawnY = groundY + half + 0.002; // small epsilon to avoid z-fighting
+  const e=document.createElement('a-entity'); e.setAttribute('position',`${pos.x} ${spawnY} ${pos.z}`); e.__type=type;
+
   if(type==='stick') {
     e.innerHTML=`<a-box color="#7a522a" depth="0.05" height="0.15" width="0.6" position="0 0.075 0"></a-box>`;
     e.setAttribute('dynamic-body','mass:0.2;shape:box;linearDamping:0.9;angularDamping:0.9;allowSleep:true;');
@@ -463,7 +491,7 @@ function spawnCollectible(type,pos){
     e.setAttribute('dynamic-body','mass:0.3;shape:box;linearDamping:0.8;angularDamping:0.8;allowSleep:true;');
   }
   else if(type==='planks') {
-    e.innerHTML=`<a-box color="#d2a679" depth="0.03" height="0.2" width="0.8" position="0 0.12 0"></a-box>`;
+    e.innerHTML=`<a-box color="#d2a679" depth="0.03" height="0.2" width="0.8" position="0 0.1 0"></a-box>`;
     e.setAttribute('dynamic-body','mass:0.35;shape:box;linearDamping:0.8;angularDamping:0.8;allowSleep:true;');
   }
   collRoot.appendChild(e);
@@ -702,16 +730,12 @@ function updateBuildPreview(){
   const staticObjs = [...document.querySelectorAll('[static-body]')].map(n=>n.object3D);
   const hits = ray.intersectObjects(staticObjs, true);
   if(hits.length){
-    // snap to hit point and align to ground normal
     const hit = hits[0];
     const p = hit.point;
-    // place preview so that its base sits on ground
     buildPreview.setAttribute('position', `${p.x} ${p.y + buildPreviewHeight} ${p.z}`);
-    // optionally rotate based on camera yaw
     const yaw = THREE.MathUtils.radToDeg(cameraEl.object3D.rotation.y);
     buildPreview.setAttribute('rotation', `0 ${yaw} 0`);
   } else {
-    // show preview in front of player at some distance
     const o=new AFRAME.THREE.Vector3(); o.setFromMatrixPosition(cameraEl.object3D.matrixWorld);
     const d=new AFRAME.THREE.Vector3(0,0,-1).applyQuaternion(cameraEl.object3D.quaternion).normalize().multiplyScalar(4);
     const p = o.clone().add(d);
@@ -746,7 +770,6 @@ document.addEventListener('mousedown', e=>{
     if(buildMode){
       const placed = placeHouseAtPreview();
       if(placed) return;
-      // if failed (e.g., no house), don't fallthrough
       return;
     }
     const didMine = mineOrChop();
