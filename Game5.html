@@ -66,7 +66,7 @@
   <div id="intro">
     <h1>Magic Survival</h1>
     <p>You awaken in the Emerald Vale with <b>nothing</b>. Scrounge sticks, rocks, and mushrooms, craft your first tools, then earn the Elder’s trust. Beware creatures in the wilds—most ignore you unless you strike first.</p>
-    <div class="muted" style="margin-bottom:10px">Controls: WASD move · Mouse look (click to lock) · Shift sprint · E pick up · G talk · Click/Space attack</div>
+    <div class="muted" style="margin-bottom:10px">Controls: WASD move · Mouse look (click to lock) · Shift sprint · E pick up · G talk · Left Click attack/place · Space jump · B to build mode</div>
     <button id="start-btn">Start Adventure</button>
   </div>
 
@@ -186,7 +186,7 @@
   <a-circle id="pond2" radius="1.4" color="#2aa3ff" position="6 0.01 -14" rotation="-90 0 0" opacity="0.9" class="clickable" static-body></a-circle>
 
   <!-- Player (locked until Start) -->
-  <a-entity id="player" position="0 1.6 2" rotation="0 0 0" kinematic-body>
+  <a-entity id="player" position="0 1.6 2">
     <a-entity id="camera" camera look-controls="pointerLockEnabled: true" position="0 0 0"></a-entity>
   </a-entity>
 </a-scene>
@@ -205,7 +205,7 @@ const state = {
   spells:[{id:'spark',name:'Spark',charges:0,max:3,dmg:15,cost:5}],
   knownSpells:new Set(['spark']),
   quest:'Talk to the Forest Elder',
-  inventory:{ stick:0, rock:0, mushroom:0, potion:0, water:0, 'wood-staff':0, 'stone-axe':0, planks:0 } // Added 'planks' to inventory
+  inventory:{ stick:0, rock:0, mushroom:0, potion:0, water:0, 'wood-staff':0, 'stone-axe':0, planks:0, house:0 }
 };
 
 const recipes = [
@@ -213,23 +213,25 @@ const recipes = [
   {id:'wood-staff', name:'Wood Staff', icon:'wood-staff', need:{stick:3}, desc:'Basic staff — improves spell damage.'},
   {id:'potion', name:'Healing Potion', icon:'potion', need:{mushroom:2,water:1}, desc:'Restores 40 HP.'},
   {id:'fireball', name:'Spell: Fireball', icon:'fireball', need:{mushroom:1,stick:1}, desc:'Unlocks Fireball spell.'},
-  {id:'planks', name:'Planks', icon:'stick', need:{stick:2}, desc:'Useful for crafting.'} // Planks recipe
+  {id:'planks', name:'Planks', icon:'stick', need:{stick:2}, desc:'Useful for crafting.'},
+  // House recipe: requires planks
+  {id:'house', name:'House (placeable)', icon:'house', need:{planks:20}, desc:'Craft a simple house that you can place.'}
 ];
 
 const CONFIG = {
-  WALK_SPEED: 2.2,          // slightly faster than before
-  SPRINT_SPEED: 3.8,        // comfy pace (not too fast)
-  SPRINT_DRAIN: 12,         // stamina/sec while sprinting & moving
-  STAM_REGEN: 6,            // stamina/sec while not sprinting
-  CLIMB_SPEED: 1.4,         // vertical m/s
-  CLIMB_DRAIN: 16,          // stamina/sec during climb
-  ENEMY_WALK: 1.2,          // enemy speed (tiny bump)
-  ENEMY_AGGRO_ONLY_WHEN_ATTACKED: true,
-  ENEMY_MIN_SPAWN_DIST: 14,  // meters from player
-  TREE_CHOP_DAMAGE: 12, // Damage dealt to tree per hit
-  TREE_HP: 30,         // Max HP of a tree
-  MINING_ROCK_DAMAGE: 10, // Damage dealt to rock per hit
-  MINING_ROCK_HP: 40      // Max HP of a rock
+  WALK_SPEED: 2.2,
+  SPRINT_SPEED: 3.8,
+  SPRINT_DRAIN: 12,
+  STAM_REGEN: 6,
+  ENEMY_WALK: 1.2,
+  ENEMY_MIN_SPAWN_DIST: 14,
+  TREE_CHOP_DAMAGE: 12,
+  TREE_HP: 30,
+  MINING_ROCK_DAMAGE: 10,
+  MINING_ROCK_HP: 40,
+  GRAVITY: -9.8,        // gravity for player's manual physics
+  JUMP_SPEED: 5.2,      // tuned jump velocity
+  PLAYER_GROUND_Y: 1.6  // player's standing Y (camera height)
 };
 
 let gameStarted = false;
@@ -255,7 +257,8 @@ function iconFor(id){
     'wood-staff':'https://img1.cgtrader.com/items/654454/91e44bd851/low-poly-swirly-mage-staff-3d-model-low-poly-rigged-fbx-blend.png',
     'stone-axe':'https://tse1.mm.bing.net/th/id/OIP.fDqfUYYaTknffHzcDrsd5gHaFc?r=0&rs=1&pid=ImgDetMain&o=7&rm=3',
     'fireball':'https://static.vecteezy.com/system/resources/thumbnails/021/698/212/small_2x/ball-of-fire-glowing-magma-sphere-fireball-large-sphere-of-red-energy-fantasy-game-spell-icon-generative-ai-png.png',
-    'planks':'https://img.freepik.com/premium-vector/wooden-plank-icon_778687-292.jpg' // Placeholder for planks icon
+    'planks':'https://img.freepik.com/premium-vector/wooden-plank-icon_778687-292.jpg',
+    'house':'https://cdn-icons-png.flaticon.com/128/69/69524.png'
   };
   return map[id]||map['stick'];
 }
@@ -263,8 +266,11 @@ function info(msg){
   const p=document.createElement('div'); p.textContent='• '+msg;
   infolog.prepend(p);
 }
-function statusPulse(t){ statusEl.textContent=t; setTimeout(()=>statusEl.textContent='Idle',1800); }
+function statusPulse(t){ statusEl.textContent=t; setTimeout(()=>statusEl.textContent='Idle',1600); }
 
+/* =========================
+   UI REFRESH (keep xp_small updated)
+========================= */
 function refreshUI(){
   hpBar.style.width=(state.hp/state.hpMax*100)+'%';
   stamBar.style.width=(state.stamina/state.staminaMax*100)+'%';
@@ -274,7 +280,10 @@ function refreshUI(){
   manaText.textContent=`${Math.round(state.mana)}/${state.manaMax}`;
   hydrationEl.textContent=`${Math.round(state.hydration)}%`;
   foodEl.textContent=`${Math.round(state.food)}%`;
-  xpEl.textContent=state.xp; xpMaxEl.textContent=state.xpMax; lvlEl.textContent=state.level;
+  xpEl.textContent=state.xp;
+  xpMaxEl.textContent=state.xpMax;
+  lvlEl.textContent=state.level;
+  xp_small.textContent = state.xp;
   questEl.textContent=state.quest;
   equippedEl.textContent=state.equipped? (state.equipped==='wood-staff'?'Wood Staff':'Stone Axe') : 'None';
   renderInventory(); renderCrafting(); updateHotbar(); updateEnemyCount();
@@ -282,6 +291,8 @@ function refreshUI(){
 
 /* =========================
    HOTBAR / INVENTORY / CRAFT
+   - House craft produces an inventory "house" item
+   - Clicking house inventory slot enters placement mode
 ========================= */
 function updateHotbar(){
   $('#hb2').src=iconFor('stone-axe');
@@ -305,6 +316,10 @@ document.addEventListener('keydown',e=>{
   if(e.key==='2') document.querySelector('.hotbar-item[data-item="wood-staff"]').click();
 });
 
+let buildMode = false;
+let buildPreview = null;
+const buildPreviewHeight = 0.01;
+
 function renderInventory(){
   const invGrid=$('#inv-grid'); if(!invGrid) return; invGrid.innerHTML='';
   Object.keys(state.inventory).forEach(k=>{
@@ -313,9 +328,9 @@ function renderInventory(){
     slot.innerHTML=`<img src="${iconFor(k)}" style="width:40px;height:40px"><div class="qty">x${qty}</div>`;
     slot.onclick=()=>{
       if(k==='potion'){ state.inventory.potion--; state.hp=Math.min(state.hp+40,state.hpMax); statusPulse('Used potion +40 HP'); }
-      if(k==='wood-staff'||k==='stone-axe'){ state.equipped=k; statusPulse('Equipped '+(k==='wood-staff'?'Wood Staff':'Stone Axe')); }
-      if(k==='planks'){ // Example of using planks
-        if(state.equipped==='wood-staff'){ // Example: use planks to upgrade staff
+      else if(k==='wood-staff'||k==='stone-axe'){ state.equipped=k; statusPulse('Equipped '+(k==='wood-staff'?'Wood Staff':'Stone Axe')); }
+      else if(k==='planks'){ // use planks example
+        if(state.equipped==='wood-staff'){
             if(state.inventory.planks >= 5){
                 state.inventory.planks -= 5;
                 state.manaMax += 10;
@@ -328,6 +343,12 @@ function renderInventory(){
         } else {
             statusPulse('Equip Wood Staff to upgrade.');
         }
+      } else if(k==='house'){
+        // enter build mode when clicking house in inventory
+        if(state.inventory.house>0){
+          enterBuildMode();
+          statusPulse('Build mode: position preview and Left Click to place. Press B to cancel.');
+        } else statusPulse('No house crafted yet.');
       }
       refreshUI();
     };
@@ -351,9 +372,10 @@ function renderCrafting(){
           state.knownSpells.add('fireball'); state.spells.push({id:'fireball',name:'Fireball',charges:2,max:2,dmg:35,cost:15});
           statusPulse('Learned Fireball'); info('You learned Fireball.');
         }
-      }else{
-        state.inventory[rc.id]=(state.inventory[rc.id]||0)+1;
-        statusPulse(rc.name+' crafted'); info(`${rc.name} crafted. Equip from inventory or hotbar.`);
+      } else {
+        // produce an item in inventory (house is placeable)
+        state.inventory[rc.id] = (state.inventory[rc.id]||0) + 1;
+        statusPulse(rc.name+' crafted'); info(`${rc.name} crafted. Use inventory to equip/place.`);
       }
       refreshUI();
     };
@@ -405,23 +427,50 @@ for(let i=0;i<22;i++) spawnTree((Math.random()*80-40).toFixed(2),(Math.random()*
 for(let i=0;i<24;i++) spawnBush((Math.random()*80-40).toFixed(2),(Math.random()*60-30).toFixed(2));
 
 /* =========================
-   COLLECTIBLES
+   COLLECTIBLES (dynamic bodies with explicit shapes so they settle correctly)
+   Fix for "floating" items: give a collision shape (box/sphere) and damping.
 ========================= */
 const collRoot=document.querySelector('#collectibles');
 function spawnCollectible(type,pos){
-  const e=document.createElement('a-entity'); e.setAttribute('position',`${pos.x} 0.01 ${pos.z}`); e.__type=type;
-  if(type==='stick') e.innerHTML=`<a-cylinder color="#7a522a" height="0.6" radius="0.05" position="0 0.3 0"></a-cylinder>`;
-  else if(type==='rock') e.innerHTML=`<a-sphere color="#777" radius="0.22" position="0 0.22 0"></a-sphere>`;
-  else if(type==='mushroom') e.innerHTML=`<a-cylinder color="#cfa07f" height="0.18" radius="0.05" position="0 0.09 0"></a-cylinder><a-sphere color="#ff3154" radius="0.15" position="0 0.22 0"></a-sphere>`;
-  else if(type==='potion') e.innerHTML=`<a-cylinder color="#d45e5e" height="0.5" radius="0.15" position="0 0.25 0"></a-cylinder>`;
-  else if(type==='water') e.innerHTML=`<a-cylinder color="#3bb4ff" height="0.8" radius="0.2" position="0 0.4 0"></a-cylinder>`;
-  else if(type==='stone-axe') e.innerHTML=`<a-box color="#888" depth="0.2" height="0.6" width="0.15" position="0 0.3 0"></a-box>`;
-  else if(type==='wood-staff') e.innerHTML=`<a-cylinder color="#6c4f2a" height="1.2" radius="0.05" position="0 0.6 0"></a-cylinder>`;
+  const y = (pos.y!==undefined)? pos.y : 0.5;
+  const e=document.createElement('a-entity'); e.setAttribute('position',`${pos.x} ${y} ${pos.z}`); e.__type=type;
+  if(type==='stick') {
+    e.innerHTML=`<a-box color="#7a522a" depth="0.05" height="0.15" width="0.6" position="0 0.075 0"></a-box>`;
+    e.setAttribute('dynamic-body','mass:0.2;shape:box;linearDamping:0.9;angularDamping:0.9;allowSleep:true;');
+  }
+  else if(type==='rock') {
+    e.innerHTML=`<a-sphere color="#777" radius="0.22" position="0 0.22 0"></a-sphere>`;
+    e.setAttribute('dynamic-body','mass:0.6;shape:sphere;linearDamping:0.6;angularDamping:0.6;allowSleep:true;');
+  }
+  else if(type==='mushroom') {
+    e.innerHTML=`<a-cylinder color="#cfa07f" height="0.18" radius="0.05" position="0 0.09 0"></a-cylinder><a-sphere color="#ff3154" radius="0.15" position="0 0.22 0"></a-sphere>`;
+    e.setAttribute('dynamic-body','mass:0.15;shape:box;linearDamping:0.9;angularDamping:0.9;allowSleep:true;');
+  }
+  else if(type==='potion') {
+    e.innerHTML=`<a-cylinder color="#d45e5e" height="0.5" radius="0.15" position="0 0.25 0"></a-cylinder>`;
+    e.setAttribute('dynamic-body','mass:0.25;shape:box;linearDamping:0.8;angularDamping:0.8;allowSleep:true;');
+  }
+  else if(type==='water') {
+    e.innerHTML=`<a-cylinder color="#3bb4ff" height="0.8" radius="0.2" position="0 0.4 0"></a-cylinder>`;
+    e.setAttribute('dynamic-body','mass:0.3;shape:box;linearDamping:0.8;angularDamping:0.8;allowSleep:true;');
+  }
+  else if(type==='stone-axe') {
+    e.innerHTML=`<a-box color="#888" depth="0.2" height="0.6" width="0.15" position="0 0.3 0"></a-box>`;
+    e.setAttribute('dynamic-body','mass:0.4;shape:box;linearDamping:0.8;angularDamping:0.8;allowSleep:true;');
+  }
+  else if(type==='wood-staff') {
+    e.innerHTML=`<a-cylinder color="#6c4f2a" height="1.2" radius="0.05" position="0 0.6 0"></a-cylinder>`;
+    e.setAttribute('dynamic-body','mass:0.3;shape:box;linearDamping:0.8;angularDamping:0.8;allowSleep:true;');
+  }
+  else if(type==='planks') {
+    e.innerHTML=`<a-box color="#d2a679" depth="0.03" height="0.2" width="0.8" position="0 0.12 0"></a-box>`;
+    e.setAttribute('dynamic-body','mass:0.35;shape:box;linearDamping:0.8;angularDamping:0.8;allowSleep:true;');
+  }
   collRoot.appendChild(e);
 }
 
 /* =========================
-   ENEMIES
+   ENEMIES (kinematic-body so AI-driven motion remains stable)
 ========================= */
 const enemiesRoot=document.querySelector('#enemies');
 function updateEnemyCount(){ $('#enemyCount').textContent=enemiesRoot.querySelectorAll('.enemy').length; }
@@ -436,6 +485,7 @@ function createEnemy(x,z){
   const hpText=document.createElement('a-text'); hpText.setAttribute('value','HP: 60'); hpText.setAttribute('position','0 1 0'); hpText.setAttribute('align','center'); hpText.setAttribute('color','#fff'); hpText.setAttribute('scale','1.2 1.2 1.2');
   e.appendChild(body); e.appendChild(eyeL); e.appendChild(eyeR); e.appendChild(pupilL); e.appendChild(pupilR); e.appendChild(hpText);
   e.classList.add('enemy');
+  e.setAttribute('kinematic-body','');
   e.__data={hp:60,alive:true,aggro:false,vx:0,vz:0,hpText:hpText,cooldown:0,dmg:5};
   enemiesRoot.appendChild(e);
   return e;
@@ -455,10 +505,14 @@ function spawnEnemySafe(){
 for(let i=0;i<5;i++) spawnEnemySafe(); updateEnemyCount();
 
 /* =========================
-   PLAYER MOVEMENT / SPRINT / CLIMB
+   PLAYER MOVEMENT / SPRINT / JUMP / SIMPLE GRAVITY
+   - player vertical physics is simulated manually
 ========================= */
 const player=$('#player'), cameraEl=$('#camera');
-let moveDir={f:false,b:false,l:false,r:false}, sprinting=false, climbing=false;
+let moveDir={f:false,b:false,l:false,r:false}, sprinting=false;
+player.__speed = CONFIG.WALK_SPEED;
+player.__velY = 0;       // vertical velocity (m/s)
+player.__grounded = true;
 
 function setSpeed(){ player.__speed = sprinting? CONFIG.SPRINT_SPEED : CONFIG.WALK_SPEED; }
 setSpeed();
@@ -470,6 +524,17 @@ document.addEventListener('keydown',e=>{
   if(e.key==='s'||e.key==='S') moveDir.b=true;
   if(e.key==='a'||e.key==='A') moveDir.l=true;
   if(e.key==='d'||e.key==='D') moveDir.r=true;
+  // Jump on Space (only if grounded)
+  if(e.code==='Space' && gameStarted){
+    e.preventDefault();
+    if(player.__grounded){
+      player.__velY = CONFIG.JUMP_SPEED;
+      player.__grounded = false;
+      statusPulse('Jump');
+    }
+  }
+  // B toggles build mode
+  if(e.key.toLowerCase()==='b'){ if(gameStarted) toggleBuildMode(); }
 });
 document.addEventListener('keyup',e=>{
   if(!gameStarted) return;
@@ -480,9 +545,13 @@ document.addEventListener('keyup',e=>{
   if(e.key==='d'||e.key==='D') moveDir.r=false;
 });
 
-function moveLoop(){
-  const dt = 1/60;
+// Movement (horizontal) and manual vertical physics
+let lastFrameTime = performance.now();
+function movementAndPhysicsLoop(now){
+  const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+  lastFrameTime = now;
   if(gameStarted){
+    // horizontal movement
     const yaw = cameraEl.object3D.rotation.y;
     const forward = new AFRAME.THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
     const right   = new AFRAME.THREE.Vector3(-forward.z,0,forward.x);
@@ -492,35 +561,27 @@ function moveLoop(){
     if(moveDir.l) dir.sub(right);
     if(moveDir.r) dir.add(right);
     if(dir.lengthSq()>0){ dir.normalize().multiplyScalar(player.__speed*dt); player.object3D.position.add(dir); }
-  }
-  requestAnimationFrame(moveLoop);
-}
-requestAnimationFrame(moveLoop);
 
-/* Climbing (hold Space when touching a wall) */
-let spaceHeld=false;
-document.addEventListener('keydown',e=>{ if(e.code==='Space' && gameStarted) spaceHeld=true; });
-document.addEventListener('keyup',e=>{ if(e.code==='Space' && gameStarted) spaceHeld=false; });
-
-function climbLoop(){
-  const dt=1/60;
-  if(gameStarted){
-    const origin=new AFRAME.THREE.Vector3(); origin.setFromMatrixPosition(cameraEl.object3D.matrixWorld);
-    const dir=new AFRAME.THREE.Vector3(0,0,-1).applyQuaternion(cameraEl.object3D.quaternion).normalize();
-    const ray=new AFRAME.THREE.Raycaster(origin,dir,0,0.8);
-    const walls=[...document.querySelectorAll('[static-body]')].map(n=>n.object3D);
-    const hits=ray.intersectObjects(walls,true);
-    const touchingWall = hits.length>0;
-    if(spaceHeld && touchingWall && state.stamina>0){
-      climbing=true; player.object3D.position.y += CONFIG.CLIMB_SPEED*dt;
-      state.stamina = Math.max(0, state.stamina - CONFIG.CLIMB_DRAIN*dt);
+    // vertical physics
+    player.__velY += CONFIG.GRAVITY * dt;
+    player.object3D.position.y += player.__velY * dt;
+    // ground collision (simple)
+    if(player.object3D.position.y <= CONFIG.PLAYER_GROUND_Y){
+      player.object3D.position.y = CONFIG.PLAYER_GROUND_Y;
+      player.__velY = 0;
+      player.__grounded = true;
     } else {
-      climbing=false;
+      player.__grounded = false;
+    }
+
+    // Build preview follow when in buildMode
+    if(buildMode && buildPreview){
+      updateBuildPreview();
     }
   }
-  requestAnimationFrame(climbLoop);
+  requestAnimationFrame(movementAndPhysicsLoop);
 }
-requestAnimationFrame(climbLoop);
+requestAnimationFrame(movementAndPhysicsLoop);
 
 /* Stamina loop */
 let lastPos=new AFRAME.THREE.Vector3();
@@ -531,16 +592,18 @@ setInterval(()=>{
   if(sprinting && (moveDir.f||moveDir.b||moveDir.l||moveDir.r) && moved>0.0005){
     state.stamina = Math.max(0, state.stamina - CONFIG.SPRINT_DRAIN/10);
     if(state.stamina<=0){ sprinting=false; setSpeed(); statusPulse('Too tired to sprint'); }
-  }else if(!climbing){
+  }else{
     state.stamina = Math.min(state.staminaMax, state.stamina + CONFIG.STAM_REGEN/10);
   }
   refreshUI();
 },100);
 
 /* =========================
-   COMBAT & MINING
+   COMBAT & MINING & BUILD PLACEMENT
+   - Left click performs place if in buildMode, otherwise mine/chop then attack
+   - Enemies grant 25 XP on death
 ========================= */
-function rayFromCam(range=3){
+function rayFromCam(range=6){
   const o=new AFRAME.THREE.Vector3(); o.setFromMatrixPosition(cameraEl.object3D.matrixWorld);
   const d=new AFRAME.THREE.Vector3(0,0,-1).applyQuaternion(cameraEl.object3D.quaternion).normalize();
   return new AFRAME.THREE.Raycaster(o,d,0,range);
@@ -559,12 +622,10 @@ function attack(range=2.2){
   if(ent.__data.hp<=0 && ent.__data.alive){
     ent.__data.alive=false; setTimeout(()=>ent.parentNode&&ent.parentNode.removeChild(ent),500);
     updateEnemyCount();
-    addXP(20); // <-- XP GAINED HERE
+    addXP(25); // XP changed to 25
     ['stick','rock','mushroom'].forEach(t=>{ if(Math.random()<0.5) spawnCollectible(t,{x:ent.object3D.position.x+(Math.random()-.5),z:ent.object3D.position.z+(Math.random()-.5)}); });
   }
 }
-document.addEventListener('mousedown',e=>{ if(e.button===0 && gameStarted) attack(); });
-document.addEventListener('keydown',e=>{ if(e.code==='Space' && gameStarted){ e.preventDefault(); attack(); }});
 
 /* Chop / Mine (need Stone Axe) */
 function mineOrChop(range=2.4){
@@ -580,17 +641,119 @@ function mineOrChop(range=2.4){
   if(!root) return false;
   if(state.equipped!=='stone-axe'){ statusPulse('Need Stone Axe'); info('Craft a Stone Axe (2× stick, 1× rock).'); return true; }
   if(root.classList.contains('tree')){
-    root.__data = root.__data || {hp:30};
-    root.__data.hp -= 12; statusPulse('Chopped tree');
-    if(root.__data.hp<=0){ root.parentNode&&root.parentNode.removeChild(root); for(let i=0;i<3;i++) spawnCollectible('stick',{x:root.object3D.position.x+(Math.random()-.5),z:root.object3D.position.z+(Math.random()-.5)}); }
-  }else{
-    root.__data = root.__data || {hp:40};
-    root.__data.hp -= 10; statusPulse('Mined rock');
+    root.__data = root.__data || {hp:CONFIG.TREE_HP};
+    root.__data.hp -= CONFIG.TREE_CHOP_DAMAGE; statusPulse('Chopped tree');
+    if(root.__data.hp<=0){
+      const px=root.object3D.position.x, pz=root.object3D.position.z;
+      root.parentNode&&root.parentNode.removeChild(root);
+      const plankCount = 1 + Math.floor(Math.random()*3);
+      for(let i=0;i<plankCount;i++){
+        spawnCollectible('planks',{x:px+(Math.random()-.5)*0.8,z:pz+(Math.random()-.5)*0.8});
+      }
+      if(Math.random()<0.5) spawnCollectible('stick',{x:px+(Math.random()-.5)*0.6,z:pz+(Math.random()-.5)*0.6});
+    }
+  } else {
+    root.__data = root.__data || {hp:CONFIG.MINING_ROCK_HP};
+    root.__data.hp -= CONFIG.MINING_ROCK_DAMAGE; statusPulse('Mined rock');
     if(root.__data.hp<=0){ root.parentNode&&root.parentNode.removeChild(root); for(let i=0;i<2;i++) spawnCollectible('rock',{x:root.object3D.position.x+(Math.random()-.5),z:root.object3D.position.z+(Math.random()-.5)}); }
   }
   return true;
 }
-document.addEventListener('mousedown',e=>{ if(e.button===0 && gameStarted){ if(mineOrChop()) refreshUI(); }});
+
+/* BUILD / PLACE functions */
+function createHouseEntity(pos, rotationY=0){
+  const house = document.createElement('a-entity');
+  house.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+  house.setAttribute('rotation', `0 ${rotationY} 0`);
+  // simple house: floor, walls and roof
+  const floor = document.createElement('a-box'); floor.setAttribute('width','3'); floor.setAttribute('depth','3'); floor.setAttribute('height','0.1'); floor.setAttribute('position','0 0 0'); floor.setAttribute('color','#8b5a2b'); house.appendChild(floor);
+  const wall1 = document.createElement('a-box'); wall1.setAttribute('width','3'); wall1.setAttribute('depth','0.1'); wall1.setAttribute('height','1.2'); wall1.setAttribute('position','0 0.65 -1.45'); wall1.setAttribute('color','#cfa07f'); house.appendChild(wall1);
+  const wall2 = document.createElement('a-box'); wall2.setAttribute('width','3'); wall2.setAttribute('depth','0.1'); wall2.setAttribute('height','1.2'); wall2.setAttribute('position','0 0.65 1.45'); wall2.setAttribute('color','#cfa07f'); house.appendChild(wall2);
+  const wall3 = document.createElement('a-box'); wall3.setAttribute('width','0.1'); wall3.setAttribute('depth','3'); wall3.setAttribute('height','1.2'); wall3.setAttribute('position','-1.45 0.65 0'); wall3.setAttribute('color','#cfa07f'); house.appendChild(wall3);
+  const wall4 = document.createElement('a-box'); wall4.setAttribute('width','0.1'); wall4.setAttribute('depth','3'); wall4.setAttribute('height','1.2'); wall4.setAttribute('position','1.45 0.65 0'); wall4.setAttribute('color','#cfa07f'); house.appendChild(wall4);
+  const roof = document.createElement('a-cone'); roof.setAttribute('radius-bottom','2'); roof.setAttribute('radius-top','0.1'); roof.setAttribute('height','0.8'); roof.setAttribute('position','0 1.3 0'); roof.setAttribute('rotation','0 0 0'); roof.setAttribute('color','#8b1f1f'); house.appendChild(roof);
+  // make static for collisions
+  house.setAttribute('static-body','');
+  return house;
+}
+
+function enterBuildMode(){
+  if(buildMode) return;
+  buildMode = true;
+  // create preview
+  if(buildPreview) buildPreview.parentNode && buildPreview.parentNode.removeChild(buildPreview);
+  buildPreview = document.createElement('a-entity');
+  // lightweight visual preview (semi-transparent)
+  const floor = document.createElement('a-box'); floor.setAttribute('width','3'); floor.setAttribute('depth','3'); floor.setAttribute('height','0.05'); floor.setAttribute('position','0 0 0'); floor.setAttribute('color','#d2a679'); floor.setAttribute('opacity','0.5'); buildPreview.appendChild(floor);
+  const roof = document.createElement('a-cone'); roof.setAttribute('radius-bottom','2'); roof.setAttribute('radius-top','0.05'); roof.setAttribute('height','0.8'); roof.setAttribute('position','0 0.7 0'); roof.setAttribute('color','#d97b7b'); roof.setAttribute('opacity','0.5'); buildPreview.appendChild(roof);
+  document.querySelector('a-scene').appendChild(buildPreview);
+  updateBuildPreview();
+}
+
+function exitBuildMode(){
+  buildMode = false;
+  if(buildPreview){ buildPreview.parentNode && buildPreview.parentNode.removeChild(buildPreview); buildPreview = null; }
+}
+
+function updateBuildPreview(){
+  if(!buildPreview) return;
+  // raycast to ground and statics to position preview
+  const ray = rayFromCam(20);
+  const staticObjs = [...document.querySelectorAll('[static-body]')].map(n=>n.object3D);
+  const hits = ray.intersectObjects(staticObjs, true);
+  if(hits.length){
+    // snap to hit point and align to ground normal
+    const hit = hits[0];
+    const p = hit.point;
+    // place preview so that its base sits on ground
+    buildPreview.setAttribute('position', `${p.x} ${p.y + buildPreviewHeight} ${p.z}`);
+    // optionally rotate based on camera yaw
+    const yaw = THREE.MathUtils.radToDeg(cameraEl.object3D.rotation.y);
+    buildPreview.setAttribute('rotation', `0 ${yaw} 0`);
+  } else {
+    // show preview in front of player at some distance
+    const o=new AFRAME.THREE.Vector3(); o.setFromMatrixPosition(cameraEl.object3D.matrixWorld);
+    const d=new AFRAME.THREE.Vector3(0,0,-1).applyQuaternion(cameraEl.object3D.quaternion).normalize().multiplyScalar(4);
+    const p = o.clone().add(d);
+    buildPreview.setAttribute('position', `${p.x} ${Math.max(p.y, CONFIG.PLAYER_GROUND_Y) + buildPreviewHeight} ${p.z}`);
+  }
+}
+
+function placeHouseAtPreview(){
+  if(!buildPreview) return false;
+  if((state.inventory.house||0) <= 0){ statusPulse('No house to place'); return false; }
+  const posAttr = buildPreview.getAttribute('position');
+  const rotAttr = buildPreview.getAttribute('rotation') || {y:0};
+  const pos = { x: posAttr.x, y: posAttr.y, z: posAttr.z };
+  const rot = (typeof rotAttr === 'string') ? parseFloat(rotAttr.split(' ')[1]||0) : (rotAttr.y||0);
+  const house = createHouseEntity(pos, rot);
+  document.querySelector('a-scene').appendChild(house);
+  state.inventory.house -= 1;
+  statusPulse('House placed'); info('House placed at ' + Math.round(pos.x) + ',' + Math.round(pos.z));
+  exitBuildMode();
+  refreshUI();
+  return true;
+}
+
+/* Unified left-click handler:
+   - If in buildMode -> place house
+   - Else if mining/chopping target -> do that (and refresh UI)
+   - Otherwise attack
+*/
+document.addEventListener('mousedown', e=>{
+  if(!gameStarted) return;
+  if(e.button === 0){ // left click
+    if(buildMode){
+      const placed = placeHouseAtPreview();
+      if(placed) return;
+      // if failed (e.g., no house), don't fallthrough
+      return;
+    }
+    const didMine = mineOrChop();
+    if(didMine){ refreshUI(); return; }
+    attack();
+  }
+});
 
 /* =========================
    INTERACTION (E pick up, G talk)
@@ -635,7 +798,7 @@ document.addEventListener('keydown',e=>{
 });
 
 /* =========================
-   ENEMY AI (no auto-aggro unless attacked)
+   ENEMY AI
 ========================= */
 let lastTime=performance.now();
 function enemyLoop(now){
@@ -668,15 +831,18 @@ requestAnimationFrame(enemyLoop);
 ========================= */
 function updateEnemyCount(){ $('#enemyCount').textContent=enemiesRoot.querySelectorAll('.enemy').length; }
 function addXP(v){
-  state.xp+=v;
-  while(state.xp>=state.xpMax){
-    state.xp-=state.xpMax; state.level++; state.xpMax=Math.floor(state.xpMax*1.25);
-    state.hpMax+=8; state.staminaMax+=6; state.manaMax+=6;
-    state.hp=state.hpMax; state.stamina=state.staminaMax; state.mana=state.manaMax;
+  state.xp += v;
+  statusPulse('Gained '+v+' XP');
+  while(state.xp >= state.xpMax){
+    state.xp -= state.xpMax;
+    state.level++;
+    state.xpMax = Math.floor(state.xpMax * 1.25);
+    state.hpMax += 8; state.staminaMax += 6; state.manaMax += 6;
+    state.hp = state.hpMax; state.stamina = state.staminaMax; state.mana = state.manaMax;
     statusPulse('Level up!'); info('Level up!');
   } refreshUI();
 }
-function damagePlayer(){ // constant 5 as requested
+function damagePlayer(){
   if(state.hp<=0) return;
   state.hp=Math.max(0,state.hp-5);
   document.getElementById('damage-flash').style.opacity=1; setTimeout(()=>document.getElementById('damage-flash').style.opacity=0,180);
@@ -684,7 +850,8 @@ function damagePlayer(){ // constant 5 as requested
   if(state.hp<=0){ statusPulse('You died. Respawning...'); setTimeout(respawnPlayer,1500); }
 }
 function respawnPlayer(){
-  player.setAttribute('position','0 1.6 2'); state.hp=state.hpMax; state.stamina=state.staminaMax; state.mana=state.manaMax; statusPulse('You respawned'); info('You respawned at camp.'); refreshUI();
+  player.setAttribute('position','0 1.6 2'); player.__velY = 0; player.__grounded = true;
+  state.hp=state.hpMax; state.stamina=state.staminaMax; state.mana=state.manaMax; statusPulse('You respawned'); info('You respawned at camp.'); refreshUI();
 }
 setInterval(()=>{
   if(!gameStarted) return;
@@ -707,7 +874,7 @@ sceneEl.addEventListener('loaded',()=>{
   document.addEventListener('pointerlockchange',()=>{ const locked=(document.pointerLockElement===canvas); showLockHelper(!locked); });
 });
 
-/* Seed starting pickups (no starter tools) */
+/* Seed starting pickups */
 function seedBasics(){
   for(let i=0;i<7;i++) spawnCollectible('stick',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
   for(let i=0;i<5;i++) spawnCollectible('rock',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
@@ -722,6 +889,15 @@ document.getElementById('start-btn').addEventListener('click',()=>{
   info('Adventure started. Gather materials and craft a Stone Axe.');
   refreshUI();
 });
+
+/* Build mode toggle via key B */
+function toggleBuildMode(){
+  if(buildMode) exitBuildMode();
+  else {
+    if((state.inventory.house||0) > 0) enterBuildMode();
+    else statusPulse('No house crafted to place');
+  }
+}
 
 /* BASIC UI INIT */
 refreshUI();
