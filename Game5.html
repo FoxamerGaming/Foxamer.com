@@ -23,7 +23,7 @@
   .hotbar-item.active{border-color:#39ffb6;box-shadow:0 0 12px #39ffb6;opacity:1}
   .hotbar-item img{width:36px;height:36px;user-select:none;-webkit-user-drag:none}
   .hotbar-key{position:absolute;bottom:-16px;left:0;right:0;text-align:center;color:#fff;font-size:12px}
-  #more-btn{width:40px;height:40px;border-radius:999px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);color:#fff;font-size:20px}
+  #more-btn{width:40px;height:40px;border-radius:9999px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);color:#fff;font-size:20px}
   #backpack{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(92vw,920px);height:min(80vh,520px);background:rgba(6,6,8,0.95);border-radius:12px;color:#fff;padding:12px;display:none;z-index:10010;border:1px solid rgba(255,255,255,0.04)}
   #backpack.open{display:block}
   .inv-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:8px;background:rgba(255,255,255,0.02);border-radius:8px;flex:2;overflow:auto}
@@ -46,8 +46,9 @@
   #lock-helper{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;background:rgba(0,0,0,.55);padding:8px 12px;border-radius:8px;font-size:14px;z-index:10006;display:none}
   #rubybar {
     position: absolute;
-    right: 18px;
-    top: 18px;
+    right: 12px;
+    top: calc(100% - 78px); /* Adjust as needed */
+    transform: translateX(0);
     background: rgba(0,0,0,0.6);
     padding: 8px 18px;
     border-radius: 14px;
@@ -82,6 +83,18 @@
     font-weight: 700;
     box-shadow: 0 0 6px #ffe inset;
   }
+  /* Building Indicator */
+  #build-preview {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 200, 0, 0.3);
+    border: 1px dashed white;
+    z-index: 10001;
+    pointer-events: none;
+    display: none; /* Hidden by default */
+  }
 </style>
 </head>
 <body>
@@ -100,8 +113,6 @@
   </div>
   <!-- Day/Night bar -->
   <div id="daytime-bar">Day</div>
-  <!-- HUD, backpack, etc. (unchanged) -->
-  <!-- ... rest of your UI code unchanged ... -->
   <!-- HUD -->
   <div id="hud">
     <div class="label-row"><strong>Level <span id="level">1</span></strong><div>XP <span id="xp">0</span>/<span id="xpMax">100</span></div></div>
@@ -164,6 +175,8 @@
   <div id="damage-flash"></div>
   <div id="prompt" style="display:none;"></div>
   <div id="lock-helper">Click the scene to enable mouse look (Esc to release)</div>
+  <!-- Building Preview -->
+  <div id="build-preview"></div>
 </div>
 <a-scene physics="gravity: -9.8" renderer="antialias:true; colorManagement:true" shadow="type:pcfsoft">
   <a-assets>
@@ -173,6 +186,7 @@
     <img id="leaf"     src="https://as2.ftcdn.net/v2/jpg/01/65/68/07/1000_F_165680748_x7HmRDk22UU5DiB4r74mVKVf2gO5mp6a.jpg" crossorigin="anonymous">
     <img id="ruby" src="https://cdn-icons-png.flaticon.com/128/1997/1997928.png" crossorigin="anonymous">
     <img id="villagerImg" src="https://cdn-icons-png.flaticon.com/128/4140/4140048.png" crossorigin="anonymous">
+    <img id="houseTex" src="https://st3.depositphotos.com/1000017/15074/i/450/depositphotos_150742104-stock-photo-wooden-house.jpg" crossorigin="anonymous">
   </a-assets>
   <a-entity light="type:ambient; color:#bbb; intensity:0.8" id="ambientLight"></a-entity>
   <a-entity light="type:directional; intensity:1" position="5 12 -3" rotation="-45 30 0" shadow="cast:true"></a-entity>
@@ -244,10 +258,17 @@ const shopItems = [
 const CONFIG = {
   WALK_SPEED: 2.2,
   SPRINT_SPEED: 3.8,
-  SPRINT_DRAIN: 12,
-  STAM_REGEN: 6,
-  ENEMY_WALK: 1.2,
-  ENEMY_MIN_SPAWN_DIST: 14,
+  SPRINT_DRAIN_RATE: 15,
+  STAM_REGEN_RATE: 8,
+  ENEMY_WALK_SPEED: 1.5,
+  ENEMY_AGGRO_RANGE: 8,
+  ENEMY_ATTACK_RANGE: 2.5,
+  ENEMY_ATTACK_COOLDOWN: 1.5, // Seconds between attacks
+  ENEMY_HEALTH: 60,
+  ENEMY_DAMAGE: 8,
+  ENEMY_ITEM_DROP_CHANCE: 0.4, // Chance for an enemy to drop an item
+  ENEMY_ITEM_DROP_TYPE: 'ruby',
+  ENEMY_ITEM_DROP_AMOUNT: 1,
   TREE_CHOP_DAMAGE: 12,
   TREE_HP: 30,
   MINING_ROCK_DAMAGE: 10,
@@ -255,11 +276,39 @@ const CONFIG = {
   GRAVITY: -9.8,
   JUMP_SPEED: 5.2,
   PLAYER_GROUND_Y: 1.6,
-  FIREBALL_MANA_COST: 18
+  FIREBALL_MANA_COST: 18,
+  CLIMB_VELOCITY: 3.8,
+  BUILD_MODE_RANGE: 10, // How far the player can place buildings
+  BUILD_MODE_OFFSET_Y: -0.5, // Offset to place building slightly below player aim
+  ENEMY_MIN_SPAWN_DIST: 12 // Added to ensure enemy spawn works
 };
 
+// ========== UTILITY FUNCTIONS ==========
+function getGroundYAt(x,z){
+  const origin = new THREE.Vector3(x, 12, z);
+  const dir = new THREE.Vector3(0, -1, 0);
+  const ray = new THREE.Raycaster(origin, dir, 0, 30);
+  const staticNodes = [...document.querySelectorAll('[static-body]')].map(n=>n.object3D);
+  const hits = ray.intersectObjects(staticNodes, true);
+  if(hits.length) return hits[0].point.y;
+  return 0;
+}
+function rayFromCam(distance = Infinity){
+  const cam = document.querySelector('#camera').object3D;
+  const origin = new THREE.Vector3();
+  cam.getWorldPosition(origin);
+  const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.getWorldQuaternion(new THREE.Quaternion()));
+  return new THREE.Raycaster(origin, direction, 0, distance);
+}
+function getTargetEntity(){
+  const ray = rayFromCam(20); // Max interaction distance
+  const entities = [...document.querySelectorAll('.clickable'), ...document.querySelectorAll('.tree'), ...document.querySelectorAll('[data-boulder]')];
+  const hits = ray.intersectObjects(entities.map(e => e.object3D), true);
+  if(hits.length > 0) return hits[0].object.el;
+  return null;
+}
 // ========== WORLD SPAWNS ==========
-function ringMountains(){
+function ringMountains(){ /* ... (unchanged) ... */
   const ring=[
     [-100,-40],[-75,-75],[-40,-105],[0,-115],[40,-105],[75,-75],[100,-40],
     [100, 40],[75, 75],[40,105],[0,115],[-40,105],[-75,75],[-100,40]
@@ -278,7 +327,7 @@ function ringMountains(){
     root.appendChild(m);
   });
 }
-function spawnTree(x,z,hp=30){
+function spawnTree(x,z,hp=30){ /* ... (unchanged) ... */
   const ent=document.createElement('a-entity'); ent.setAttribute('position',`${x} 0 ${z}`); ent.classList.add('tree'); ent.setAttribute('static-body','');
   const trunk=document.createElement('a-cylinder'); trunk.setAttribute('height','2'); trunk.setAttribute('radius','0.25'); trunk.setAttribute('color','#8B5A2B'); trunk.setAttribute('position','0 1 0'); trunk.setAttribute('material','src:#bark; roughness:1');
   const crown=document.createElement('a-entity');
@@ -288,12 +337,12 @@ function spawnTree(x,z,hp=30){
   ent.__data={hp};
   document.querySelector('#trees').appendChild(ent);
 }
-function spawnBush(x,z){
+function spawnBush(x,z){ /* ... (unchanged) ... */
   const e=document.createElement('a-entity'); e.setAttribute('position',`${x} 0 ${z}`); e.setAttribute('static-body','');
   for(let i=0;i<6;i++){ const s=document.createElement('a-sphere'); s.setAttribute('radius',0.35+Math.random()*0.25); s.setAttribute('color',i%2?'#126b34':'#0f7f39'); s.setAttribute('material','src:#leaf; roughness:1'); s.setAttribute('position',`${(Math.random()-.5)*0.9} ${0.35+Math.random()*0.2} ${(Math.random()-.5)*0.9}`); e.appendChild(s); }
   document.querySelector('#bushes').appendChild(e);
 }
-function spawnBoulder(x,z){
+function spawnBoulder(x,z){ /* ... (unchanged) ... */
   const e=document.createElement('a-entity'); e.setAttribute('position',`${x} 0 ${z}`); e.setAttribute('data-boulder',''); e.setAttribute('static-body','');
   const s=document.createElement('a-sphere'); s.setAttribute('radius',0.65+Math.random()*0.3); s.setAttribute('color','#7a7a7a'); s.setAttribute('position','0 0.65 0');
   e.appendChild(s); e.__data={hp:CONFIG.MINING_ROCK_HP};
@@ -305,11 +354,10 @@ for(let i=0;i<16;i++) spawnBush((Math.random()*80-40).toFixed(2),(Math.random()*
 for(let i=0;i<12;i++) spawnBoulder((Math.random()*80-40).toFixed(2),(Math.random()*60-30).toFixed(2));
 
 // ========== DAY/NIGHT CYCLE ==========
-let timeOfDay = 0; // 0-1, 0=day, 0.5=night, 1=day
+let timeOfDay = 0; /* ... (unchanged) ... */
 function updateDayNight(){
   timeOfDay += 0.0007;
   if(timeOfDay>1) timeOfDay=0;
-  // Sky color: interpolate day/night
   const dayColor = new THREE.Color("#88dffe");
   const nightColor = new THREE.Color("#181938");
   const t = Math.abs(Math.sin(timeOfDay*Math.PI));
@@ -323,19 +371,10 @@ updateDayNight();
 
 // ========== COLLECTIBLES ==========
 const collRoot=document.querySelector('#collectibles');
-function getGroundYAt(x,z){
-  const origin = new THREE.Vector3(x, 12, z);
-  const dir = new THREE.Vector3(0, -1, 0);
-  const ray = new THREE.Raycaster(origin, dir, 0, 30);
-  const staticNodes = [...document.querySelectorAll('[static-body]')].map(n=>n.object3D);
-  const hits = ray.intersectObjects(staticNodes, true);
-  if(hits.length) return hits[0].point.y;
-  return 0;
-}
-function spawnCollectible(type,pos){
+function spawnCollectible(type,pos){ /* ... (unchanged) ... */
   const halfHeights = {
     stick: 0.075, rock: 0.10, mushroom: 0.1, potion: 0.25, water: 0.4,
-    'stone-axe': 0.3, 'wood-staff': 0.6, planks: 0.1
+    'stone-axe': 0.3, 'wood-staff': 0.6, planks: 0.1, house: 1.5 // House height for placement
   };
   const half = halfHeights[type] || 0.18;
   const groundY = getGroundYAt(pos.x, pos.z);
@@ -376,12 +415,17 @@ function spawnCollectible(type,pos){
   else if(type==='ruby') {
     e.innerHTML = `<a-sphere color="#e8006f" radius="0.18" position="0 0.18 0"></a-sphere>`;
     e.setAttribute('dynamic-body', 'mass:0.2;shape:sphere;linearDamping:0.8;angularDamping:0.8;allowSleep:true;');
+  } else if (type === 'house') { // For placing the house blueprint
+    e.setAttribute('geometry', {primitive: 'box', width: 4, height: 3, depth: 4});
+    e.setAttribute('material', {src: '#houseTex', opacity: 0.5, transparent: true});
+    e.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+    e.classList.add('house-blueprint');
+    e.setAttribute('static-body',''); // Give it a body for collision detection
+    return e; // Return directly for blueprint
   }
   collRoot.appendChild(e);
 }
-
-// Seed starting pickups
-function seedBasics(){
+function seedBasics(){ /* ... (unchanged) ... */
   for(let i=0;i<7;i++) spawnCollectible('stick',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
   for(let i=0;i<5;i++) spawnCollectible('rock',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
   for(let i=0;i<4;i++) spawnCollectible('mushroom',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
@@ -390,9 +434,10 @@ seedBasics();
 
 // ========== ENEMIES ==========
 const enemiesRoot=document.querySelector('#enemies');
-function updateEnemyCount(){ document.getElementById('enemyCount').textContent=enemiesRoot.querySelectorAll('.enemy').length; }
+let activeEnemies = []; // Keep track of active enemies for physics
+function updateEnemyCount(){ document.getElementById('enemyCount').textContent=activeEnemies.length; }
 function createEnemy(x,z){
-  const e=document.createElement('a-entity'); e.setAttribute('position',`${x} 0.5 ${z}`);
+  const e=document.createElement('a-entity'); e.setAttribute('position',`${x} 0.5 ${z}`); e.classList.add('enemy');
   const body=document.createElement('a-sphere'); body.setAttribute('radius','0.5'); body.setAttribute('color','#ff5c5c'); body.setAttribute('shadow','cast:true');
   const eyeL=document.createElement('a-sphere'); eyeL.setAttribute('radius','0.07'); eyeL.setAttribute('color','#fff'); eyeL.setAttribute('position','-0.15 0.12 0.45');
   const eyeR=document.createElement('a-sphere'); eyeR.setAttribute('radius','0.07'); eyeR.setAttribute('color','#fff'); eyeR.setAttribute('position','0.15 0.12 0.45');
@@ -400,26 +445,106 @@ function createEnemy(x,z){
   const pupilR=document.createElement('a-sphere'); pupilR.setAttribute('radius','0.03'); pupilR.setAttribute('color','#000'); pupilR.setAttribute('position','0.15 0.12 0.52');
   const hpText=document.createElement('a-text'); hpText.setAttribute('value','HP: 60'); hpText.setAttribute('position','0 1 0'); hpText.setAttribute('align','center'); hpText.setAttribute('color','#fff'); hpText.setAttribute('scale','1.2 1.2 1.2');
   e.appendChild(body); e.appendChild(eyeL); e.appendChild(eyeR); e.appendChild(pupilL); e.appendChild(pupilR); e.appendChild(hpText);
-  e.classList.add('enemy');
-  e.setAttribute('kinematic-body','');
-  e.__data={hp:60,alive:true,aggro:false,vx:0,vz:0,hpText:hpText,cooldown:0,dmg:5, burning:0};
+  e.setAttribute('kinematic-body',''); // Use kinematic for controlled movement
+  e.__data={
+    hp:CONFIG.ENEMY_HEALTH, alive:true, aggro:false,
+    vx:0, vz:0, // velocity components
+    hpText:hpText, cooldown:0, dmg: CONFIG.ENEMY_DAMAGE, burning:0,
+    wanderTarget: { x: x + (Math.random()-0.5)*5, z: z + (Math.random()-0.5)*5 } // Initial wander target
+  };
   enemiesRoot.appendChild(e);
+  activeEnemies.push(e); // Add to active list
   return e;
 }
-function spawnEnemySafe(){
+function spawnEnemies(count, minDist){
   const p=document.querySelector('#player').object3D.position;
-  let x,z,tries=0, ok=false;
-  while(!ok && tries<40){
-    x=(Math.random()*80-40); z=(Math.random()*60-30); tries++;
-    const d=Math.hypot(x-p.x,z-p.z);
-    if(d>=CONFIG.ENEMY_MIN_SPAWN_DIST) ok=true;
+  for(let i=0; i<count; i++){
+    let x,z,tries=0, ok=false;
+    while(!ok && tries<40){
+      x=(Math.random()*80-40); z=(Math.random()*60-30); tries++;
+      const d=Math.hypot(x-p.x,z-p.z);
+      if(d>=minDist) ok=true;
+    }
+    if(ok) createEnemy(x.toFixed(2), z.toFixed(2));
   }
-  createEnemy(x.toFixed(2), z.toFixed(2));
+  updateEnemyCount();
 }
-for(let i=0;i<5;i++) spawnEnemySafe(); updateEnemyCount();
+function updateEnemies(dt){
+  const playerPos = document.querySelector('#player').object3D.position;
+  const playerRadius = 1.5; // Player's rough radius for attack checks
+
+  activeEnemies = activeEnemies.filter(e => e.parentNode); // Remove dead enemies from the list
+
+  for (const e of activeEnemies) {
+    if (!e.__data.alive) continue;
+
+    const enemyPos = e.object3D.position;
+    const distToPlayer = Math.hypot(enemyPos.x - playerPos.x, enemyPos.z - playerPos.z);
+
+    // Aggro and Attack Logic
+    if (distToPlayer < CONFIG.ENEMY_AGGRO_RANGE) {
+      e.__data.aggro = true;
+    }
+
+    if (e.__data.aggro) {
+      // Move towards player if not in attack range
+      if (distToPlayer > CONFIG.ENEMY_ATTACK_RANGE) {
+        const angle = Math.atan2(playerPos.z - enemyPos.z, playerPos.x - enemyPos.x);
+        e.__data.vx = Math.cos(angle) * CONFIG.ENEMY_WALK_SPEED;
+        e.__data.vz = Math.sin(angle) * CONFIG.ENEMY_WALK_SPEED;
+      } else {
+        // In attack range, stop moving and attack if cooldown is over
+        e.__data.vx = 0;
+        e.__data.vz = 0;
+        if (e.__data.cooldown <= 0) {
+          e.__data.cooldown = CONFIG.ENEMY_ATTACK_COOLDOWN;
+          // Player takes damage
+          state.hp -= e.__data.dmg;
+          if (state.hp < 0) state.hp = 0;
+          refreshUI();
+          // Player damage flash effect
+          const damageFlash = document.getElementById('damage-flash');
+          damageFlash.style.opacity = '0.8';
+          setTimeout(() => damageFlash.style.opacity = '0', 150);
+          logInfo(`Took ${e.__data.dmg} damage!`);
+          if(state.hp <= 0) {
+             logInfo("You have been defeated!");
+             // Game over logic could go here
+          }
+        }
+      }
+    } else {
+      // Wander behavior if not aggro'd
+      const wanderDist = Math.hypot(enemyPos.x - e.__data.wanderTarget.x, enemyPos.z - e.__data.wanderTarget.z);
+      if (wanderDist < 1.0) { // Reached wander target, set a new one
+        e.__data.wanderTarget.x = enemyPos.x + (Math.random()-0.5)*5;
+        e.__data.wanderTarget.z = enemyPos.z + (Math.random()-0.5)*5;
+      }
+      const angle = Math.atan2(e.__data.wanderTarget.z - enemyPos.z, e.__data.wanderTarget.x - enemyPos.x);
+      e.__data.vx = Math.cos(angle) * CONFIG.ENEMY_WALK_SPEED * 0.4; // Slower wander speed
+      e.__data.vz = Math.sin(angle) * CONFIG.ENEMY_WALK_SPEED * 0.4;
+    }
+
+    // Cooldown decrement
+    if (e.__data.cooldown > 0) {
+      e.__data.cooldown -= dt;
+    }
+
+    // Apply movement
+    enemyPos.x += e.__data.vx * dt;
+    enemyPos.z += e.__data.vz * dt;
+    e.setAttribute('position', `${enemyPos.x} ${enemyPos.y} ${enemyPos.z}`);
+
+    // Update HP text position
+    e.__data.hpText.setAttribute('position', `${enemyPos.x} ${enemyPos.y + 1} ${enemyPos.z}`);
+  }
+}
+
+// Spawn initial enemies
+spawnEnemies(22, CONFIG.ENEMY_MIN_SPAWN_DIST); // 22 enemies at minimum distance
 
 // ========== UI/REFRESH ==========
-function updateRubyBar(){
+function updateRubyBar(){ /* ... (unchanged) ... */
   document.getElementById('rubyCount').textContent = state.inventory.ruby || 0;
 }
 function refreshUI(){
@@ -436,9 +561,20 @@ function refreshUI(){
   document.getElementById('level').textContent=state.level;
   document.getElementById('quest').textContent=state.quest;
   document.getElementById('equipped').textContent=state.equipped? (state.equipped==='wood-staff'?'Wood Staff':'Stone Axe') : 'None';
-  document.getElementById('xp_small').textContent = state.xp; // Update the small XP display
+  document.getElementById('xp_small').textContent = state.xp;
   updateRubyBar();
   updateEnemyCount();
+  document.getElementById('status').textContent = player.__grounded ? (sprinting ? 'Sprinting' : 'Idle') : 'In Air';
+}
+function logInfo(message) { /* ... (unchanged) ... */
+  const infolog = document.getElementById('infolog');
+  const messageElement = document.createElement('div');
+  messageElement.textContent = message;
+  infolog.appendChild(messageElement);
+  if (infolog.children.length > 10) {
+    infolog.removeChild(infolog.children[0]);
+  }
+  infolog.scrollTop = infolog.scrollHeight;
 }
 
 // ========== START BUTTON ==========
@@ -447,14 +583,76 @@ document.getElementById('start-btn').onclick = () => {
   document.getElementById('intro').style.display='none';
   gameStarted = true;
   refreshUI();
+  // Start the game loop for enemies
+  requestAnimationFrame(gameLoop);
 };
 
 // ========== PLAYER MOVEMENT & PHYSICS ==========
 const player=document.getElementById('player'), cameraEl=document.getElementById('camera');
 let moveDir={f:false,b:false,l:false,r:false}, sprinting=false;
 player.__speed = CONFIG.WALK_SPEED; player.__velY = 0; player.__grounded = true;
-function setSpeed(){ player.__speed = sprinting? CONFIG.SPRINT_SPEED : CONFIG.WALK_SPEED; }
-setSpeed();
+let buildModeActive = false;
+let currentBuildingPreview = null;
+let entitiesInScene = new Set(); // To store all A-Frame entities
+
+function setSpeed(){ player.__speed = sprinting ? CONFIG.SPRINT_SPEED : CONFIG.WALK_SPEED; }
+function manageStamina(dt) {
+  if (sprinting) {
+    state.stamina -= CONFIG.SPRINT_DRAIN_RATE * dt;
+    if (state.stamina < 0) {
+      state.stamina = 0;
+      sprinting = false;
+      setSpeed();
+      logInfo("Ran out of stamina!");
+    }
+  } else {
+    state.stamina += CONFIG.STAM_REGEN_RATE * dt;
+    if (state.stamina > state.staminaMax) {
+      state.stamina = state.staminaMax;
+    }
+  }
+  state.stamina = Math.max(0, Math.min(state.staminaMax, state.stamina));
+  refreshUI();
+}
+
+// ---------- CLIMBING SUPPORT ----------
+function startClimbAtHit(hit) {
+  if (!hit) return false;
+  // Find top-level ancestor under scene to compute a bounding box covering the whole object
+  let rootObj = hit.object;
+  while (rootObj.parent && rootObj.parent.type !== 'Scene') {
+    rootObj = rootObj.parent;
+  }
+  // Compute world-space bounding box
+  const box = new THREE.Box3().setFromObject(rootObj);
+  if (!box || box.isEmpty && !box.isEmpty()) {
+    // bad box
+    return false;
+  }
+  const topY = box.max.y;
+  const hitPoint = hit.point.clone();
+  const margin = 0.15;
+  const targetX = Math.max(box.min.x + margin, Math.min(box.max.x - margin, hitPoint.x));
+  const targetZ = Math.max(box.min.z + margin, Math.min(box.max.z - margin, hitPoint.z));
+  const currentFeetY = player.object3D.position.y;
+  const desiredFeetY = topY + CONFIG.PLAYER_GROUND_Y;
+  if (desiredFeetY <= currentFeetY + 0.01) {
+    logInfo("Already at or above the object's top.");
+    return false;
+  }
+  player.__climbing = {
+    active: true,
+    targetTopY: topY,
+    targetPos: { x: targetX, z: targetZ },
+    sourceHitEl: (hit.object && hit.object.el) || null
+  };
+  player.__grounded = false;
+  player.__velY = 0;
+  logInfo("Climbing...");
+  return true;
+}
+
+// ---------- KEY HANDLING (movement + climb + build) ----------
 document.addEventListener('keydown',e=>{
   if(!gameStarted) return;
   if(e.key==='Shift'){ sprinting=true; setSpeed(); }
@@ -467,17 +665,34 @@ document.addEventListener('keydown',e=>{
     if(player.__grounded){
       player.__velY = CONFIG.JUMP_SPEED;
       player.__grounded = false;
+      logInfo("Jump!");
     }
   }
-  // B toggles build mode (not shown for brevity)
-  // C climb
-  if(e.key.toLowerCase()==='c'){
-    const ray = rayFromCam(1.2);
-    const statics = [...document.querySelectorAll('[static-body]')].map(n=>n.object3D);
-    const hits = ray.intersectObjects(statics,true);
-    if(hits.length && player.__grounded){
-      player.__velY = 3.8;
-      player.__grounded = false;
+  // C: Climb Action (NEW)
+  if(e.key && e.key.toLowerCase()==='c'){
+    if(!player.__grounded){
+      logInfo("Can't start climbing while in the air.");
+    } else {
+      const raycaster = rayFromCam(2.0); // short forward ray
+      const staticObjs = [...document.querySelectorAll('[static-body]')].map(el => el.object3D).filter(Boolean);
+      const hits = raycaster.intersectObjects(staticObjs, true);
+      if(hits.length > 0){
+        const firstHit = hits[0];
+        const didStart = startClimbAtHit(firstHit);
+        if(!didStart) logInfo("No climbable top found or already above the top.");
+      } else {
+        logInfo("No object in front to climb.");
+      }
+    }
+  }
+  // B: Build Mode Toggle
+  if(e.key.toLowerCase()==='b'){
+    buildModeActive = !buildModeActive;
+    if(buildModeActive) {
+      logInfo("Build mode enabled. Press 'B' to exit. Left-click to place.");
+      showBuildingPreview('house'); // Show blueprint for house
+    } else {
+      hideBuildingPreview();
     }
   }
 });
@@ -489,12 +704,75 @@ document.addEventListener('keyup',e=>{
   if(e.key==='a'||e.key==='A') moveDir.l=false;
   if(e.key==='d'||e.key==='D') moveDir.r=false;
 });
+
+// Mouse click for building placement
+document.addEventListener('mousedown', (e) => {
+  if (!gameStarted || !buildModeActive) return;
+  if (e.button === 0) { // Left click
+    e.preventDefault(); // Prevent camera movement while placing
+    if (state.inventory.house > 0) {
+      placeBuilding('house');
+    } else {
+      showPrompt("You need to craft a house first!");
+    }
+  }
+});
+
 let lastFrameTime = performance.now();
-function movementAndPhysicsLoop(now){
+
+// ---------- UPDATED gameLoop to handle automated climbing ----------
+function gameLoop(now){
   const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
   lastFrameTime = now;
+
   if(gameStarted){
-    // horizontal movement
+    // If player is climbing, drive automated movement towards top and skip gravity
+    if(player.__climbing && player.__climbing.active){
+      const pos = player.object3D.position;
+      const tp = player.__climbing.targetPos;
+      const targetY = player.__climbing.targetTopY + CONFIG.PLAYER_GROUND_Y;
+
+      // Horizontal movement toward target X,Z
+      const dx = tp.x - pos.x;
+      const dz = tp.z - pos.z;
+      const distXZ = Math.hypot(dx, dz);
+      if(distXZ > 0.001){
+        const moveXZ = Math.min(distXZ, CONFIG.CLIMB_VELOCITY * dt);
+        pos.x += (dx / distXZ) * moveXZ;
+        pos.z += (dz / distXZ) * moveXZ;
+      }
+
+      // Vertical movement toward targetY
+      if(pos.y < targetY){
+        pos.y = Math.min(pos.y + CONFIG.CLIMB_VELOCITY * dt, targetY);
+      }
+
+      // Apply position
+      player.object3D.position.set(pos.x, pos.y, pos.z);
+      player.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+
+      const arrivedVertically = pos.y >= targetY - 0.001;
+      const arrivedHorizontally = distXZ <= 0.06;
+      if(arrivedVertically && arrivedHorizontally){
+        // Snap player to top and finalize climbing
+        player.object3D.position.set(tp.x, targetY, tp.z);
+        player.setAttribute('position', `${tp.x} ${targetY} ${tp.z}`);
+        player.__climbing.active = false;
+        player.__grounded = true;
+        player.__velY = 0;
+        logInfo("Reached the top and stood on it.");
+      }
+
+      // Still update other world systems while climbing
+      manageStamina(dt);
+      updateEnemies(dt);
+      updateBuildingPreview();
+
+      requestAnimationFrame(gameLoop);
+      return;
+    }
+
+    // Not climbing: regular movement and gravity
     const yaw = cameraEl.object3D.rotation.y;
     const forward = new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
     const right   = new THREE.Vector3(-forward.z,0,forward.x);
@@ -504,7 +782,8 @@ function movementAndPhysicsLoop(now){
     if(moveDir.l) dir.sub(right);
     if(moveDir.r) dir.add(right);
     if(dir.lengthSq()>0){ dir.normalize().multiplyScalar(player.__speed*dt); player.object3D.position.add(dir); }
-    // vertical physics
+
+    // Vertical physics
     player.__velY += CONFIG.GRAVITY * dt;
     player.object3D.position.y += player.__velY * dt;
     if(player.object3D.position.y <= CONFIG.PLAYER_GROUND_Y){
@@ -512,16 +791,21 @@ function movementAndPhysicsLoop(now){
       player.__velY = 0;
       player.__grounded = true;
     } else { player.__grounded = false; }
+
+    // Stamina management
+    manageStamina(dt);
+    // Update enemies
+    updateEnemies(dt);
+    // Update building preview position
+    updateBuildingPreview();
   }
-  requestAnimationFrame(movementAndPhysicsLoop);
+  requestAnimationFrame(gameLoop);
 }
-requestAnimationFrame(movementAndPhysicsLoop);
 
 // ========== RIGHT CLICK FIREBALL ==========
-document.addEventListener('mousedown',e=>{
+document.addEventListener('mousedown',e=>{ /* ... (unchanged) ... */
   if(!gameStarted) return;
   if(e.button === 2){ // right click
-    // Fireball: need staff, spell known, and charges
     if(state.equipped === 'wood-staff' && state.knownSpells.has('fireball') && (state.inventory.fireball||0)>0 && state.mana >= CONFIG.FIREBALL_MANA_COST){
       shootFireball();
     }
@@ -529,12 +813,10 @@ document.addEventListener('mousedown',e=>{
 });
 
 // ========== FIREBALL SPELL LOGIC ==========
-function shootFireball(){
-  // Use one charge, subtract mana
+function shootFireball(){ /* ... (unchanged) ... */
   state.inventory.fireball -= 1;
   state.mana -= CONFIG.FIREBALL_MANA_COST;
   refreshUI();
-  // Spawn fireball visual and check hit
   const cam = cameraEl.object3D;
   const pos = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
   const dir = new THREE.Vector3(0,0,-1).applyQuaternion(cam.quaternion).normalize();
@@ -551,7 +833,6 @@ function shootFireball(){
     t+=0.05;
     pos.add(dir.clone().multiplyScalar(0.48));
     fb.setAttribute('position',`${pos.x} ${pos.y} ${pos.z}`);
-    // Hit detection: enemies
     for(const e of enemiesRoot.children){
       if(!e.__data||!e.__data.alive) continue;
       const ep = e.object3D.position;
@@ -559,15 +840,20 @@ function shootFireball(){
         hit = true;
         e.__data.hp -= 36;
         e.__data.hpText.setAttribute('value','HP: '+Math.max(0,Math.round(e.__data.hp)));
-        // Chance of burning
         if(Math.random()<0.45){
-          e.__data.burning = 5; // seconds
+          e.__data.burning = 5;
           e.setAttribute('color','#ffb133');
         }
         if(e.__data.hp<=0 && e.__data.alive){
           e.__data.alive=false; setTimeout(()=>e.parentNode&&e.parentNode.removeChild(e),500);
           updateEnemyCount();
-          spawnCollectible('ruby',{x:ep.x, z:ep.z});
+          // Enemy item drop logic
+          if (Math.random() < CONFIG.ENEMY_ITEM_DROP_CHANCE) {
+            for(let i=0; i < CONFIG.ENEMY_ITEM_DROP_AMOUNT; i++) {
+              spawnCollectible(CONFIG.ENEMY_ITEM_DROP_TYPE, {x:ep.x, z:ep.z});
+            }
+          }
+          logInfo("Enemy defeated!");
         }
         break;
       }
@@ -578,7 +864,7 @@ function shootFireball(){
 }
 
 // ========== BURNING DAMAGE ==========
-setInterval(()=>{
+setInterval(()=>{ /* ... (unchanged) ... */
   for(const e of enemiesRoot.children){
     if(e.__data && e.__data.burning>0){
       e.__data.hp -= 2;
@@ -588,14 +874,18 @@ setInterval(()=>{
       if(e.__data.hp<=0 && e.__data.alive){
         e.__data.alive=false; setTimeout(()=>e.parentNode&&e.parentNode.removeChild(e),500);
         updateEnemyCount();
-        spawnCollectible('ruby',{x:e.object3D.position.x, z:e.object3D.position.z});
+        if (Math.random() < CONFIG.ENEMY_ITEM_DROP_CHANCE) {
+          for(let i=0; i < CONFIG.ENEMY_ITEM_DROP_AMOUNT; i++) {
+            spawnCollectible(CONFIG.ENEMY_ITEM_DROP_TYPE, {x:e.object3D.position.x, z:e.object3D.position.z});
+          }
+        }
       }
     }
   }
 },1000);
 
 // ========== SHOP & INTERACTION ==========
-function interactTalk(){
+function interactTalk(){ /* ... (unchanged) ... */
   const p = player.object3D.position;
   const elder = document.querySelector('#npc-group').object3D.position;
   const villager = document.querySelector('#villager-far').object3D.position;
@@ -604,26 +894,33 @@ function interactTalk(){
   if(Math.hypot(elder.x-p.x,elder.z-p.z)<2.2){
     if(state.quest==='Talk to the Forest Elder'){
       state.quest='Collect 5 sticks for the Elder';
+      logInfo("Elder: 'The forest needs help. Gather 5 sticks for me.'");
     }else if(state.quest==='Collect 5 sticks for the Elder'){
       if((state.inventory.stick||0)>=5){
         state.inventory.stick-=5; state.quest='Complete! Elder teaches Fireball.';
         if(!state.knownSpells.has('fireball')){
-          state.knownSpells.add('fireball'); state.spells.push({id:'fireball',name:'Fireball',charges:2,max:2,dmg:36,cost:CONFIG.FIREBALL_MANA_COST});
+          state.knownSpells.add('fireball');
+          state.spells.push({id:'fireball',name:'Fireball',charges:2,max:2,dmg:36,cost:CONFIG.FIREBALL_MANA_COST});
           state.inventory.fireball += 2;
+          logInfo("Elder: 'Thank you! Here is a token of my gratitude and knowledge.'");
+        } else {
+          logInfo("Elder: 'You have already brought the sticks. Well done.'");
         }
+      } else {
+        logInfo("Elder: 'You have not yet gathered the sticks.'");
       }
     }
     refreshUI(); return true;
   }
   // Far Villager
   if(Math.hypot(villager.x-p.x, villager.z-p.z)<2.2){
-    showPrompt('Villager: "Lovely day! Stay safe out there."'); return true;
+    logInfo('Villager: "Stay safe out there!"'); return true;
   }
   // Shopkeeper
   if(Math.abs(p.x-shopHouse.x)<2 && Math.abs(p.z-shopHouse.z)<2){ interactShop(); return true; }
-  showPrompt('No one to talk to'); return false;
+  logInfo('No one to talk to'); return false;
 }
-function interactPickup(){
+function interactPickup(){ /* ... (unchanged) ... */
   const p=player.object3D.position;
   let nearest=null, nd=9e9;
   [...collRoot.children].forEach(c=>{
@@ -636,22 +933,27 @@ function interactPickup(){
       state.inventory.ruby = (state.inventory.ruby||0)+1;
       nearest.parentNode&&nearest.parentNode.removeChild(nearest);
       refreshUI();
+      logInfo('Picked up a ruby! ✨');
       return true;
     }
     state.inventory[t]=(state.inventory[t]||0)+1;
     nearest.parentNode&&nearest.parentNode.removeChild(nearest);
-    refreshUI(); return true;
+    refreshUI();
+    logInfo(`Picked up a ${t}.`);
+    return true;
   }
   for(const id of ['pond1','pond2']){
     const po=document.getElementById(id).object3D.position; const d=Math.hypot(po.x-p.x, po.z-p.z);
-    if(d<2){ state.inventory.water=(state.inventory.water||0)+1; refreshUI(); return true; }
+    if(d<2){ state.inventory.water=(state.inventory.water||0)+1; refreshUI(); logInfo('Collected some water. 💧'); return true; }
   }
   return false;
 }
-function interactShop(){
+function interactShop(){ 
   const p = player.object3D.position;
-  const shopPos = {x: 20, y: 0, z: 17};
-  if(Math.abs(p.x-shopPos.x)<2 && Math.abs(p.z-shopPos.z)<2){
+  const shopHouseEntity = document.querySelector('#shop-house');
+  if(!shopHouseEntity) { showPrompt('No shop found'); return false; }
+  const shopHousePos = shopHouseEntity.object3D.position;
+  if(Math.abs(p.x - shopHousePos.x) < 2.2 && Math.abs(p.z - shopHousePos.z) < 2.2){
     let msg = 'Shop - Buy with Rubies:<br>';
     shopItems.forEach(item=>{
       msg += `${item.name} (${item.price} rubies) <button onclick="window.buyShopItem('${item.id}')">Buy</button><br>`;
@@ -663,18 +965,25 @@ function interactShop(){
   showPrompt('No shop nearby');
   return false;
 }
-window.buyShopItem = function(id){
+window.buyShopItem = function(id){ /* ... (unchanged) ... */
   const item = shopItems.find(i=>i.id===id);
   if(!item) return;
   if((state.inventory.ruby||0) < item.price){
     showPrompt('Not enough rubies!'); return;
   }
   state.inventory.ruby -= item.price;
-  if(id === 'food') state.food = Math.min(100, state.food + 50);
-  if(id === 'armour') { state.hpMax += 20; state.hp = state.hpMax; }
+  if(id === 'food') {
+    state.food = Math.min(100, state.food + 50);
+    logInfo('Ate some food. 🍎');
+  }
+  if(id === 'armour') {
+    state.hpMax += 20;
+    state.hp = state.hpMax;
+    logInfo('Equipped better armor! 🛡️');
+  }
   showPrompt('Thanks for your purchase!'); refreshUI();
 };
-window.openSellMenu = function(){
+window.openSellMenu = function(){ /* ... (unchanged) ... */
   let msg = 'Sell Items for Rubies:<br>';
   Object.keys(state.inventory).forEach(k=>{
     if(state.inventory[k]>0 && k!=='ruby'){
@@ -684,7 +993,7 @@ window.openSellMenu = function(){
   if(msg==='Sell Items for Rubies:<br>') msg += 'No items to sell!';
   showPrompt(msg);
 };
-window.sellItem = function(id){
+window.sellItem = function(id){ /* ... (unchanged) ... */
   if(!state.inventory[id]||id==='ruby') return;
   state.inventory[id]--;
   state.inventory.ruby = (state.inventory.ruby||0)+1;
@@ -692,46 +1001,227 @@ window.sellItem = function(id){
   window.openSellMenu();
   refreshUI();
 };
-function showPrompt(html){
+function showPrompt(html){ /* ... (unchanged) ... */
   const p = document.getElementById('prompt');
   p.innerHTML = html;
   p.style.display = 'block';
   setTimeout(()=>{p.style.display='none';}, 2600);
 }
-document.addEventListener('keydown',e=>{
+document.addEventListener('keydown',e=>{ /* ... (unchanged) ... */
   if(!gameStarted) return;
   if(e.key.toLowerCase()==='e') interactPickup();
   if(e.key.toLowerCase()==='g') interactTalk();
 });
 
 // ========== UPGRADE STATS LOGIC ==========
-function upgradeStat(statName, cost) {
+function upgradeStat(statName, cost) { /* ... (unchanged) ... */
   if (state.xp >= cost) {
     state.xp -= cost;
     if (statName === 'hp') {
       state.hpMax += 10;
-      state.hp = state.hpMax; // Restore to full health
+      state.hp = state.hpMax;
+      logInfo("HP increased! ❤️");
     } else if (statName === 'stamina') {
       state.staminaMax += 5;
-      state.stamina = state.staminaMax; // Restore to full stamina
+      state.stamina = state.staminaMax;
+      logInfo("Stamina increased! 💨");
     } else if (statName === 'mana') {
       state.manaMax += 8;
-      state.mana = state.manaMax; // Restore to full mana
+      state.mana = state.manaMax;
+      logInfo("Mana increased! 🪄");
     }
-    refreshUI(); // Update the UI to reflect changes
+    refreshUI();
   } else {
-    showPrompt("Not enough XP to upgrade!"); // Provide feedback to the player
+    showPrompt("Not enough XP to upgrade!");
   }
 }
-
-// Add event listeners to the upgrade buttons
 document.getElementById('up-hp').addEventListener('click', () => upgradeStat('hp', 50));
 document.getElementById('up-stam').addEventListener('click', () => upgradeStat('stamina', 30));
 document.getElementById('up-mana').addEventListener('click', () => upgradeStat('mana', 30));
 
 
+// ========== BACKPACK HOTBAR FUNCTIONALITY ==========
+const backpack = document.getElementById('backpack');
+const moreBtn = document.getElementById('more-btn');
+const closeBpBtn = document.getElementById('close-bp');
+moreBtn.addEventListener('click', () => {
+  backpack.classList.add('open');
+  logInfo("Opened backpack.");
+});
+closeBpBtn.addEventListener('click', () => {
+  backpack.classList.remove('open');
+  logInfo("Closed backpack.");
+});
+
+// ========== CRAFTING RECIPES ==========
+const craftingList = document.getElementById('craft-list');
+const recipes = [
+  { id: 'planks', name: 'Planks', materials: { stick: 2, rock: 1 }, icon: 'https://cdn-icons-png.flaticon.com/512/264/264918.png' },
+  { id: 'wood-staff', name: 'Wood Staff', materials: { stick: 3 }, icon: 'https://img.icons8.com/ios-filled/50/000000/wizard-staff.png' }, // Adjusted recipe
+  { id: 'stone-axe', name: 'Stone Axe', materials: { stick: 3, rock: 3 }, icon: 'https://img.icons8.com/ios-glyphs/50/000000/axe.png' },
+  { id: 'potion', name: 'Health Potion', materials: { mushroom: 2, water: 1 }, icon: 'https://img.icons8.com/ios-glyphs/50/000000/potion.png' },
+  { id: 'house', name: 'House', materials: { planks: 10, rock: 5 }, icon: 'https://img.icons8.com/ios-filled/50/000000/house.png' } // House recipe
+];
+
+function renderCraftingRecipes() {
+  craftingList.innerHTML = '';
+  recipes.forEach(recipe => {
+    const recipeElement = document.createElement('div');
+    recipeElement.classList.add('craft-row');
+    recipeElement.innerHTML = `
+      <div class="craft-left">
+        <img src="${recipe.icon}" alt="${recipe.name}">
+        <span>${recipe.name}</span>
+      </div>
+      <button onclick="craftItem('${recipe.id}')" class="ui-clickable">Craft (${getMaterialCostString(recipe.materials)})</button>
+    `;
+    craftingList.appendChild(recipeElement);
+  });
+}
+function getMaterialCostString(materials) { return Object.entries(materials).map(([item, count]) => `${item} x${count}`).join(', '); }
+function craftItem(itemId) {
+  const recipe = recipes.find(r => r.id === itemId);
+  if (!recipe) return;
+  let canCraft = true;
+  for (const [material, count] of Object.entries(recipe.materials)) {
+    if ((state.inventory[material] || 0) < count) {
+      canCraft = false;
+      break;
+    }
+  }
+  if (canCraft) {
+    for (const [material, count] of Object.entries(recipe.materials)) {
+      state.inventory[material] -= count;
+    }
+    state.inventory[itemId] = (state.inventory[itemId] || 0) + 1;
+    refreshUI();
+    logInfo(`Crafted ${recipe.name}!`);
+  } else {
+    showPrompt(`Not enough materials to craft ${recipe.name}.`);
+  }
+}
+document.getElementById('start-btn').addEventListener('click', renderCraftingRecipes);
+
+// ========== BUILDING SYSTEM ==========
+let placedBuildings = []; // Keep track of placed structures
+
+function showBuildingPreview(buildingType) {
+  if (currentBuildingPreview) {
+    currentBuildingPreview.parentNode.removeChild(currentBuildingPreview);
+  }
+  currentBuildingPreview = document.createElement('a-entity');
+  currentBuildingPreview.setAttribute('id', 'build-preview');
+  currentBuildingPreview.setAttribute('geometry', { primitive: 'box', width: 4, height: 3, depth: 4 });
+  currentBuildingPreview.setAttribute('material', { src: '#houseTex', opacity: 0.4, transparent: true }); // House blueprint
+  currentBuildingPreview.setAttribute('position', '0 100 0'); // Start high up
+  currentBuildingPreview.style.display = 'block';
+  document.querySelector('a-scene').appendChild(currentBuildingPreview);
+}
+
+function hideBuildingPreview() {
+  if (currentBuildingPreview) {
+    currentBuildingPreview.style.display = 'none';
+  }
+}
+
+function updateBuildingPreview() {
+  if (!buildModeActive || !currentBuildingPreview) return;
+
+  const ray = rayFromCam(CONFIG.BUILD_MODE_RANGE);
+  const groundY = getGroundYAt(ray.origin.x, ray.origin.z);
+  const previewPos = {
+    x: ray.origin.x,
+    y: groundY + CONFIG.BUILD_MODE_OFFSET_Y + 1.5, // Player's base height + offset + half building height
+    z: ray.origin.z
+  };
+
+  // Check for collisions with existing entities to validate placement
+  const collision = checkBuildingCollision(previewPos);
+  if (collision) {
+    currentBuildingPreview.setAttribute('material', 'opacity', 0.2); // Indicate invalid placement
+  } else {
+    currentBuildingPreview.setAttribute('material', 'opacity', 0.4); // Indicate valid placement
+  }
+  currentBuildingPreview.setAttribute('position', `${previewPos.x} ${previewPos.y} ${previewPos.z}`);
+}
+
+function checkBuildingCollision(pos) {
+  // Basic collision check against existing static bodies and other placed buildings
+  const buildingSize = { width: 4, height: 3, depth: 4 };
+  const buffer = 0.2; // Small buffer for clearance
+
+  // Check against ground
+  if (pos.y < CONFIG.PLAYER_GROUND_Y + buildingSize.height / 2) return true; // Cannot place below ground
+
+  // Check against existing entities (including placed buildings)
+  const collisionRaycaster = new THREE.Raycaster();
+  const halfSize = new THREE.Vector3(buildingSize.width / 2, buildingSize.height / 2, buildingSize.depth / 2);
+
+  // Check multiple points around the placement area to approximate collision
+  const testPoints = [
+    new THREE.Vector3(pos.x - halfSize.x + buffer, pos.y, pos.z - halfSize.z + buffer),
+    new THREE.Vector3(pos.x + halfSize.x - buffer, pos.y, pos.z - halfSize.z + buffer),
+    new THREE.Vector3(pos.x - halfSize.x + buffer, pos.y, pos.z + halfSize.z - buffer),
+    new THREE.Vector3(pos.x + halfSize.x - buffer, pos.y, pos.z + halfSize.z - buffer),
+    new THREE.Vector3(pos.x, pos.y + halfSize.y - buffer, pos.z) // Check center too
+  ];
+
+  for (const testPoint of testPoints) {
+    const origin = new THREE.Vector3(testPoint.x, 20, testPoint.z); // Start ray from above
+    const direction = new THREE.Vector3(0, -1, 0);
+    collisionRaycaster.set(origin, direction, 0, 30);
+    const staticNodes = [...document.querySelectorAll('[static-body]')].map(el => el.object3D);
+    const hits = collisionRaycaster.intersectObjects(staticNodes, true);
+
+    if (hits.length > 0 && hits[0].point.y > testPoint.y - buffer) { // Check if ground is too high or there's an object
+      return true; // Collision detected
+    }
+  }
+  return false;
+}
+
+
+function placeBuilding(buildingType) {
+  if (!buildModeActive || !currentBuildingPreview) return;
+
+  const pos = currentBuildingPreview.object3D.position;
+  if (checkBuildingCollision({x: pos.x, y: pos.y, z: pos.z})) {
+    showPrompt("Cannot place building here - collision detected!");
+    return;
+  }
+
+  // Deduct resources
+  state.inventory.house--;
+  state.inventory.planks -= 10; // Ensure these are consistent with recipe
+  state.inventory.rock -= 5;
+
+  // Create the actual building entity
+  const house = document.createElement('a-entity');
+  house.setAttribute('geometry', { primitive: 'box', width: 4, height: 3, depth: 4 });
+  house.setAttribute('material', { src: '#houseTex', roughness: 1 });
+  house.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+  house.setAttribute('static-body', ''); // Make it a static body
+  house.classList.add('building');
+  document.querySelector('a-scene').appendChild(house);
+  entitiesInScene.add(house); // Add to our tracked entities
+
+  logInfo("House built!");
+  refreshUI();
+  hideBuildingPreview();
+  buildModeActive = false; // Exit build mode after placement
+}
+
+// Initial setup for building preview
+document.addEventListener('DOMContentLoaded', () => {
+  if (gameStarted) { // If game already started, initialize preview
+    showBuildingPreview('house');
+    hideBuildingPreview(); // Hide until build mode is active
+  }
+});
+
 // ========== MISC ==========
 refreshUI();
+requestAnimationFrame(gameLoop); // Ensure gameLoop starts if script loads after start button
 </script>
 </body>
 </html>
