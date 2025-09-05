@@ -44,6 +44,17 @@
   #intro p{max-width:680px;text-align:center;margin:0 0 16px 0;opacity:.9}
   #start-btn{padding:10px 18px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.1);color:#fff;font-weight:700;cursor:pointer}
   #lock-helper{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);color:#fff;background:rgba(0,0,0,.55);padding:8px 12px;border-radius:8px;font-size:14px;z-index:10006;display:none}
+  #build-preview {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 200, 0, 0.3);
+    border: 1px dashed white;
+    z-index: 10001;
+    pointer-events: none;
+    display: none;
+  }
   #rubybar {
     position: absolute;
     right: 12px;
@@ -82,17 +93,6 @@
     z-index: 10030;
     font-weight: 700;
     box-shadow: 0 0 6px #ffe inset;
-  }
-  #build-preview {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0, 200, 0, 0.3);
-    border: 1px dashed white;
-    z-index: 10001;
-    pointer-events: none;
-    display: none;
   }
   /* Death overlay */
   #deathOverlay {
@@ -190,7 +190,6 @@
   <div id="prompt" style="display:none;"></div>
   <div id="lock-helper">Click the scene to enable mouse look (Esc to release)</div>
   <div id="build-preview"></div>
-
   <div id="deathOverlay"><div class="box"><div id="deathText" style="font-size:26px;font-weight:800;margin-bottom:6px">You have died</div><div id="respawnCountdown" style="font-size:18px">Respawning in 4...</div></div></div>
 </div>
 
@@ -204,23 +203,19 @@
     <img id="villagerImg" src="https://cdn-icons-png.flaticon.com/128/4140/4140048.png" crossorigin="anonymous">
     <img id="houseTex" src="https://st3.depositphotos.com/1000017/15074/i/450/depositphotos_150742104-stock-photo-wooden-house.jpg" crossorigin="anonymous">
   </a-assets>
-
   <a-entity light="type:ambient; color:#bbb; intensity:0.8" id="ambientLight"></a-entity>
   <a-entity light="type:directional; intensity:1" position="5 12 -3" rotation="-45 30 0" shadow="cast:true"></a-entity>
   <a-plane id="ground" src="#grassTex" rotation="-90 0 0" width="240" height="240"
            material="repeat: 100 100; roughness: 1" shadow="receive:true" static-body></a-plane>
   <a-sky id="sky" color="#88dffe"></a-sky>
-
   <a-entity id="castle" position="0 0 -28">
     <a-box color="#444" width="16" height="10" depth="16" position="0 5 0" shadow="cast:true" static-body></a-box>
     <a-text value="Dark Evil Castle" color="#fff" position="-4 12 -2" scale="3 3 3"></a-text>
   </a-entity>
-
   <a-entity id="mountains"></a-entity>
   <a-entity id="trees"></a-entity>
   <a-entity id="bushes"></a-entity>
   <a-entity id="boulders"></a-entity>
-
   <a-entity id="npc-group" position="0 0 -6">
     <a-box id="npc" color="#FFD700" position="0 1 0" depth="0.6" height="2" width="1.2" class="clickable" shadow="cast:true" static-body></a-box>
     <a-text value="Forest Elder (G to talk)" position="-1.6 2.6 0" color="#fff" align="center"></a-text>
@@ -229,7 +224,6 @@
     <a-box color="#a7e0a0" position="0 1 0" depth="0.7" height="2" width="1.2" shadow="cast:true" static-body></a-box>
     <a-text value="Villager" color="#fff" position="-1.2 2.6 0" scale="2 2 2"></a-text>
   </a-entity>
-
   <a-entity id="shop-house" position="20 0 17">
     <a-box width="3" depth="3" height="0.1" position="0 0 0" color="#8b5a2b"></a-box>
     <a-box width="3" depth="0.1" height="1.2" position="0 0.65 -1.45" color="#cfa07f"></a-box>
@@ -243,13 +237,10 @@
       <a-text value="Shop: G to buy/sell" color="#fff" position="-1.7 2.6 0" scale="1.6 1.6 1.6"></a-text>
     </a-entity>
   </a-entity>
-
   <a-entity id="collectibles"></a-entity>
   <a-entity id="enemies"></a-entity>
-
   <a-circle id="pond1" radius="1.2" color="#2aa3ff" position="-6 0.01 -10" rotation="-90 0 0" opacity="0.9" class="clickable" static-body></a-circle>
   <a-circle id="pond2" radius="1.4" color="#2aa3ff" position="6 0.01 -14" rotation="-90 0 0" opacity="0.9" class="clickable" static-body></a-circle>
-
   <a-entity id="player" position="0 1.6 2">
     <a-entity id="camera" camera look-controls="pointerLockEnabled: true" position="0 0 0"></a-entity>
   </a-entity>
@@ -329,6 +320,19 @@ function getTargetEntity(){
   const hits = ray.intersectObjects(entities.map(e => e.object3D), true);
   if(hits.length > 0) return hits[0].object.el;
   return null;
+}
+
+// ========== FLOATING TEXT ==========
+function showFloatingText(msg, pos, color='#fff') {
+  const txt = document.createElement('a-text');
+  txt.setAttribute('value', msg);
+  txt.setAttribute('color', color);
+  txt.setAttribute('position', `${pos.x} ${pos.y+1.4} ${pos.z}`);
+  txt.setAttribute('scale', '2 2 2');
+  txt.setAttribute('align', 'center');
+  txt.setAttribute('side', 'double');
+  document.querySelector('a-scene').appendChild(txt);
+  setTimeout(() => { txt.parentNode && txt.parentNode.removeChild(txt); }, 1100);
 }
 
 // ========== WORLD SPAWNS =========
@@ -499,28 +503,39 @@ function spawnEnemies(count, minDist){
   updateEnemyCount();
 }
 
+// ================= IMPROVED ENEMY DEATH =================
 function onEnemyDeath(e, source){
   if(!e.__data || e.__data.awarded) return;
   e.__data.awarded = true;
   e.__data.alive = false;
   e.setAttribute('visible', false);
-  setTimeout(()=>{ if(e.parentNode) e.parentNode.removeChild(e); }, 500);
-  updateEnemyCount();
 
   // XP reward
   state.xp += CONFIG.ENEMY_XP;
   logInfo(`Gained ${CONFIG.ENEMY_XP} XP for defeating an enemy.`);
   checkLevelUp();
 
+  // Show floating XP
+  const pos = e.object3D.position;
+  showFloatingText(`+${CONFIG.ENEMY_XP} XP`, pos, '#39ffb6');
+
   // Item drop(s)
+  let droppedItem = false;
   if (Math.random() < CONFIG.ENEMY_ITEM_DROP_CHANCE) {
     for(let i=0; i < CONFIG.ENEMY_ITEM_DROP_AMOUNT; i++) {
-      spawnCollectible(CONFIG.ENEMY_ITEM_DROP_TYPE, {x:e.object3D.position.x, z:e.object3D.position.z});
+      spawnCollectible(CONFIG.ENEMY_ITEM_DROP_TYPE, {x:pos.x, z:pos.z});
+      droppedItem = true;
     }
   }
+  if (droppedItem) showFloatingText('Ruby!', pos, '#e8006f');
+
+  setTimeout(()=>{ if(e.parentNode) e.parentNode.removeChild(e); }, 500);
+  updateEnemyCount();
   refreshUI();
 }
 
+// ================== ENEMY AI ==================
+// Aggro only if provoked, not proximity
 function updateEnemies(dt){
   const playerPos = document.querySelector('#player').object3D.position;
   activeEnemies = activeEnemies.filter(e => e.parentNode);
@@ -528,7 +543,13 @@ function updateEnemies(dt){
     if (!e.__data.alive) continue;
     const enemyPos = e.object3D.position;
     const distToPlayer = Math.hypot(enemyPos.x - playerPos.x, enemyPos.z - playerPos.z);
-    if (distToPlayer < CONFIG.ENEMY_AGGRO_RANGE) e.__data.aggro = true;
+
+    // Only chase if provoked (aggro set by attack)
+    if (e.__data.aggro && distToPlayer < CONFIG.ENEMY_AGGRO_RANGE) {
+      // Already provoked, keep chasing if in range
+      e.__data.aggro = true;
+    }
+
     if (e.__data.aggro) {
       if (distToPlayer > CONFIG.ENEMY_ATTACK_RANGE) {
         const angle = Math.atan2(playerPos.z - enemyPos.z, playerPos.x - enemyPos.x);
@@ -763,6 +784,7 @@ document.addEventListener('keyup',e=>{
 
 // Mouse click for building placement and attacks
 let playerAttackCooldown = 0;
+
 document.addEventListener('mousedown', (e) => {
   if(!gameStarted) return;
   if(state.isDead) return;
@@ -814,6 +836,7 @@ function meleeAttack(){
         if(state.equipped === 'stone-axe') dmg += 18;
         else if(state.equipped === 'wood-staff') dmg += 6;
         e.__data.hp -= dmg;
+        e.__data.aggro = true; // AGGRO ON HIT!
         e.__data.hpText.setAttribute('value','HP: '+Math.max(0,Math.round(e.__data.hp)));
         logInfo(`Hit enemy for ${dmg} damage.`);
         // small knockback
@@ -935,6 +958,7 @@ function shootFireball(){
       if(Math.hypot(ep.x-pos.x,ep.y-pos.y,ep.z-pos.z)<1.1){
         hit = true;
         e.__data.hp -= 36;
+        e.__data.aggro = true; // AGGRO ON HIT!
         e.__data.hpText.setAttribute('value','HP: '+Math.max(0,Math.round(e.__data.hp)));
         if(Math.random()<0.45){
           e.__data.burning = 5;
@@ -1328,9 +1352,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ========== MISC ==========
-// initialize UI
 refreshUI();
-// Note: gameLoop and enemy spawning start only when Start is pressed.
 </script>
 </body>
 </html>
