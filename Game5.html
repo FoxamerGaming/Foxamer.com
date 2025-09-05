@@ -28,6 +28,7 @@
   #backpack.open{display:block}
   .inv-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:8px;background:rgba(255,255,255,0.02);border-radius:8px;flex:2;overflow:auto}
   .slot{height:72px;background:#101012;border-radius:8px;display:flex;align-items:center;justify-content:center;position:relative;border:1px solid rgba(255,255,255,0.08);cursor:pointer}
+  .slot img { width: 50%; height: 50%; object-fit: contain; }
   .qty{position:absolute;right:6px;bottom:6px;font-size:12px;opacity:0.9}
   .craft-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px dashed rgba(255,255,255,0.06)}
   .craft-left{display:flex;align-items:center;gap:10px}
@@ -202,6 +203,18 @@
     <img id="ruby" src="https://cdn-icons-png.flaticon.com/128/1997/1997928.png" crossorigin="anonymous">
     <img id="villagerImg" src="https://cdn-icons-png.flaticon.com/128/4140/4140048.png" crossorigin="anonymous">
     <img id="houseTex" src="https://st3.depositphotos.com/1000017/15074/i/450/depositphotos_150742104-stock-photo-wooden-house.jpg" crossorigin="anonymous">
+    <!-- Placeholder icons for inventory items -->
+    <img id="icon-stick" src="https://img.icons8.com/ios-glyphs/90/000000/stick.png" crossorigin="anonymous">
+    <img id="icon-rock" src="https://img.icons8.com/ios-glyphs/90/000000/rock.png" crossorigin="anonymous">
+    <img id="icon-mushroom" src="https://img.icons8.com/ios-glyphs/90/000000/mushroom.png" crossorigin="anonymous">
+    <img id="icon-potion" src="https://img.icons8.com/ios-glyphs/90/000000/potion.png" crossorigin="anonymous">
+    <img id="icon-water" src="https://img.icons8.com/ios-glyphs/90/000000/water-bottle.png" crossorigin="anonymous">
+    <img id="icon-wood-staff" src="https://img.icons8.com/ios-filled/90/000000/wizard-staff.png" crossorigin="anonymous">
+    <img id="icon-stone-axe" src="https://img.icons8.com/ios-glyphs/90/000000/axe.png" crossorigin="anonymous">
+    <img id="icon-planks" src="https://img.icons8.com/ios-glyphs/90/000000/wood.png" crossorigin="anonymous">
+    <img id="icon-house" src="https://img.icons8.com/ios-filled/90/000000/house.png" crossorigin="anonymous">
+    <img id="icon-ruby" src="https://cdn-icons-png.flaticon.com/128/1997/1997928.png" crossorigin="anonymous">
+    <img id="icon-ruby-necklace" src="https://cdn-icons-png.flaticon.com/512/1049/1049753.png" crossorigin="anonymous">
   </a-assets>
   <a-entity light="type:ambient; color:#bbb; intensity:0.8" id="ambientLight"></a-entity>
   <a-entity light="type:directional; intensity:1" position="5 12 -3" rotation="-45 30 0" shadow="cast:true"></a-entity>
@@ -258,7 +271,7 @@ const state = {
   spells:[{id:'spark',name:'Spark',charges:0,max:3,dmg:15,cost:5}],
   knownSpells:new Set(['spark']),
   quest:'Talk to the Forest Elder',
-  inventory:{ stick:0, rock:0, mushroom:0, potion:0, water:0, 'wood-staff':0, 'stone-axe':0, planks:0, house:0, ruby:0, fireball:0 },
+  inventory:{ stick:0, rock:0, mushroom:0, potion:0, water:0, 'wood-staff':0, 'stone-axe':0, planks:0, house:0, ruby:0, fireball:0, 'ruby-necklace':0 },
   isDead:false
 };
 const shopItems = [
@@ -276,9 +289,9 @@ const CONFIG = {
   ENEMY_ATTACK_COOLDOWN: 1.5,
   ENEMY_HEALTH: 60,
   ENEMY_DAMAGE: 8,
-  ENEMY_ITEM_DROP_CHANCE: 0.4,
-  ENEMY_ITEM_DROP_TYPE: 'ruby',
-  ENEMY_ITEM_DROP_AMOUNT: 1,
+  ENEMY_ITEM_DROP_CHANCE: 0.6, // Increased to 60%
+  ENEMY_ITEM_DROP_TYPE: 'ruby', // The type of item to drop
+  ENEMY_ITEM_DROP_AMOUNT: 2,    // Increased to 2 items per drop
   ENEMY_XP: 25,
   TREE_CHOP_DAMAGE: 12,
   TREE_HP: 30,
@@ -294,8 +307,57 @@ const CONFIG = {
   ENEMY_MIN_SPAWN_DIST: 12,
   PLAYER_MELEE_RANGE: 2.2,
   PLAYER_MELEE_COOLDOWN: 0.6,
-  PLAYER_MELEE_BASE_DAMAGE: 10
+  PLAYER_MELEE_BASE_DAMAGE: 10,
+
+  // Respawn Timers (in seconds)
+  RESPAWN_DELAY_SHORT: 120, // 2 minutes for small items
+  RESPAWN_DELAY_MEDIUM: 180, // 3 minutes for medium items
+  RESPAWN_DELAY_LARGE: 300, // 5 minutes for larger/complex items
 };
+
+// Global object to manage respawn timers
+const respawnTimers = {};
+const activeResources = new Set(); // To keep track of currently spawned items
+
+// Function to spawn a single resource item
+function spawnResource(type, pos) {
+  const resource = spawnCollectible(type, pos); // Use existing spawn function
+  if (resource) {
+    activeResources.add(resource);
+    // Schedule respawn
+    let delay = CONFIG.RESPAWN_DELAY_SHORT;
+    if (type === 'tree' || type === 'boulder' || type === 'bush') { // Assign delays based on type
+      delay = CONFIG.RESPAWN_DELAY_LARGE;
+    }
+    scheduleRespawn(type, pos, delay);
+  }
+}
+
+// Function to schedule a respawn for a resource
+function scheduleRespawn(type, pos, delay) {
+  // Create a unique key for each potential spawn point to avoid conflicts
+  // Using a simple string concatenation with fixed precision for position
+  const timerKey = `${type}-${pos.x.toFixed(2)}x${pos.z.toFixed(2)}`;
+
+  if (respawnTimers[timerKey]) clearTimeout(respawnTimers[timerKey]); // Clear if already scheduled
+
+  respawnTimers[timerKey] = setTimeout(() => {
+    // Before spawning, check if an item of this type already exists at the location (e.g., picked up before timer expired)
+    // This check is basic; a more robust system might check bounding boxes.
+    let itemAlreadyPresent = false;
+    activeResources.forEach(res => {
+      if (res && res.__type === type && Math.hypot(res.object3D.position.x - pos.x, res.object3D.position.z - pos.z) < 0.5) {
+        itemAlreadyPresent = true;
+      }
+    });
+
+    if (!itemAlreadyPresent) {
+      spawnResource(type, pos);
+    }
+    delete respawnTimers[timerKey]; // Clean up timer after execution
+  }, delay * 1000);
+}
+
 
 // ========== UTILITY FUNCTIONS =========
 function getGroundYAt(x,z){
@@ -364,101 +426,91 @@ function spawnTree(x,z,hp=30){
   ent.appendChild(trunk); ent.appendChild(crown);
   ent.__data={hp};
   document.querySelector('#trees').appendChild(ent);
+  activeResources.add(ent); // Add to active resources
+  // Schedule respawn for trees (longer delay)
+  scheduleRespawn('tree', {x:parseFloat(x), z:parseFloat(z)}, CONFIG.RESPAWN_DELAY_LARGE);
 }
+
 function spawnBush(x,z){
   const e=document.createElement('a-entity'); e.setAttribute('position',`${x} 0 ${z}`); e.setAttribute('static-body','');
   for(let i=0;i<6;i++){ const s=document.createElement('a-sphere'); s.setAttribute('radius',0.35+Math.random()*0.25); s.setAttribute('color',i%2?'#126b34':'#0f7f39'); s.setAttribute('material','src:#leaf; roughness:1'); s.setAttribute('position',`${(Math.random()-.5)*0.9} ${0.35+Math.random()*0.2} ${(Math.random()-.5)*0.9}`); e.appendChild(s); }
   document.querySelector('#bushes').appendChild(e);
+  activeResources.add(e);
+  // Schedule respawn for bushes (medium delay)
+  scheduleRespawn('bush', {x:parseFloat(x), z:parseFloat(z)}, CONFIG.RESPAWN_DELAY_MEDIUM);
 }
+
 function spawnBoulder(x,z){
   const e=document.createElement('a-entity'); e.setAttribute('position',`${x} 0 ${z}`); e.setAttribute('data-boulder',''); e.setAttribute('static-body','');
   const s=document.createElement('a-sphere'); s.setAttribute('radius',0.65+Math.random()*0.3); s.setAttribute('color','#7a7a7a'); s.setAttribute('position','0 0.65 0');
   e.appendChild(s); e.__data={hp:CONFIG.MINING_ROCK_HP};
   document.querySelector('#boulders').appendChild(e);
+  activeResources.add(e);
+  // Schedule respawn for boulders (medium delay)
+  scheduleRespawn('boulder', {x:parseFloat(x), z:parseFloat(z)}, CONFIG.RESPAWN_DELAY_MEDIUM);
 }
 ringMountains();
-for(let i=0;i<20;i++) spawnTree((Math.random()*80-40).toFixed(2),(Math.random()*60-30).toFixed(2));
-for(let i=0;i<16;i++) spawnBush((Math.random()*80-40).toFixed(2),(Math.random()*60-30).toFixed(2));
-for(let i=0;i<12;i++) spawnBoulder((Math.random()*80-40).toFixed(2),(Math.random()*60-30).toFixed(2));
-
-// ========== DAY/NIGHT CYCLE ==========
-let timeOfDay = 0;
-function updateDayNight(){
-  timeOfDay += 0.0007;
-  if(timeOfDay>1) timeOfDay=0;
-  const dayColor = new THREE.Color("#88dffe");
-  const nightColor = new THREE.Color("#181938");
-  const t = Math.abs(Math.sin(timeOfDay*Math.PI));
-  const lerped = dayColor.clone().lerp(nightColor, t);
-  document.querySelector('#sky').setAttribute('color', '#'+lerped.getHexString());
-  document.getElementById('daytime-bar').textContent = t<0.6 ? "Day" : "Night";
-  document.getElementById('ambientLight').setAttribute('light', `type:ambient; color:${'#'+lerped.getHexString()}; intensity:${0.8-(t*0.5)}`);
-  setTimeout(updateDayNight, 40);
-}
-updateDayNight();
+// Call seedBasics which now uses spawnResource
+seedBasics();
 
 // ========== COLLECTIBLES ==========
-const collRoot=document.querySelector('#collectibles');
+// spawnCollectible function remains mostly the same, but now spawnResource will call it and manage respawns.
 function spawnCollectible(type,pos){
-  const halfHeights = {
-    stick: 0.075, rock: 0.10, mushroom: 0.1, potion: 0.25, water: 0.4,
-    'stone-axe': 0.3, 'wood-staff': 0.6, planks: 0.1, house: 1.5, ruby: 0.18
+  const itemData = { // Item type, associated icon ID, and scale
+    stick: {icon:'icon-stick', scale: 0.2}, rock: {icon:'icon-rock', scale: 0.2}, mushroom: {icon:'icon-mushroom', scale: 0.2},
+    potion: {icon:'icon-potion', scale: 0.2}, water: {icon:'icon-water', scale: 0.2}, 'wood-staff': {icon:'icon-wood-staff', scale: 0.4},
+    'stone-axe': {icon:'icon-stone-axe', scale: 0.3}, planks: {icon:'icon-planks', scale: 0.2}, house: {icon:'icon-house', scale: 0.5},
+    ruby: {icon:'icon-ruby', scale: 0.25}, 'ruby-necklace': {icon:'icon-ruby-necklace', scale: 0.3}
   };
-  const half = halfHeights[type] || 0.18;
+  const halfHeight = (itemData[type]?.scale || 0.2) / 2;
   const groundY = getGroundYAt(pos.x, pos.z);
-  const spawnY = groundY + half + 0.002;
+  const spawnY = groundY + halfHeight + 0.002;
+
   const e=document.createElement('a-entity'); e.setAttribute('position',`${pos.x} ${spawnY} ${pos.z}`); e.__type=type;
-  if(type==='stick') {
-    e.innerHTML=`<a-box color="#7a522a" depth="0.05" height="0.15" width="0.6" position="0 0.075 0"></a-box>`;
-    e.setAttribute('dynamic-body','mass:0.2;shape:box;linearDamping:0.9;angularDamping:0.9;allowSleep:true;');
-  }
-  else if(type==='rock') {
-    e.innerHTML=`<a-sphere color="#777" radius="0.22" position="0 0.22 0"></a-sphere>`;
-    e.setAttribute('dynamic-body','mass:0.6;shape:sphere;linearDamping:0.6;angularDamping:0.6;allowSleep:true;');
-  }
-  else if(type==='mushroom') {
-    e.innerHTML=`<a-cylinder color="#cfa07f" height="0.18" radius="0.05" position="0 0.09 0"></a-cylinder><a-sphere color="#ff3154" radius="0.15" position="0 0.22 0"></a-sphere>`;
-    e.setAttribute('dynamic-body','mass:0.15;shape:box;linearDamping:0.9;angularDamping:0.9;allowSleep:true;');
-  }
-  else if(type==='potion') {
-    e.innerHTML=`<a-cylinder color="#d45e5e" height="0.5" radius="0.15" position="0 0.25 0"></a-cylinder>`;
-    e.setAttribute('dynamic-body','mass:0.25;shape:box;linearDamping:0.8;angularDamping:0.8;allowSleep:true;');
-  }
-  else if(type==='water') {
-    e.innerHTML=`<a-cylinder color="#3bb4ff" height="0.8" radius="0.2" position="0 0.4 0"></a-cylinder>`;
-    e.setAttribute('dynamic-body','mass:0.3;shape:box;linearDamping:0.8;angularDamping:0.8;allowSleep:true;');
-  }
-  else if(type==='stone-axe') {
-    e.innerHTML=`<a-box color="#888" depth="0.2" height="0.6" width="0.15" position="0 0.3 0"></a-box>`;
-    e.setAttribute('dynamic-body','mass:0.4;shape:box;linearDamping:0.8;angularDamping:0.8;allowSleep:true;');
-  }
-  else if(type==='wood-staff') {
-    e.innerHTML=`<a-cylinder color="#6c4f2a" height="1.2" radius="0.05" position="0 0.6 0"></a-cylinder>`;
-    e.setAttribute('dynamic-body','mass:0.3;shape:box;linearDamping:0.8;angularDamping:0.8;allowSleep:true;');
-  }
-  else if(type==='planks') {
-    e.innerHTML=`<a-box color="#d2a679" depth="0.03" height="0.2" width="0.8" position="0 0.1 0"></a-box>`;
-    e.setAttribute('dynamic-body','mass:0.35;shape:box;linearDamping:0.8;angularDamping:0.8;allowSleep:true;');
-  }
-  else if(type==='ruby') {
-    e.innerHTML = `<a-sphere color="#e8006f" radius="0.18" position="0 0.18 0"></a-sphere>`;
-    e.setAttribute('dynamic-body', 'mass:0.2;shape:sphere;linearDamping:0.8;angularDamping:0.8;allowSleep:true;');
-  } else if (type === 'house') {
+
+  if(type === 'house'){ // Special case for building
     e.setAttribute('geometry', {primitive: 'box', width: 4, height: 3, depth: 4});
     e.setAttribute('material', {src: '#houseTex', opacity: 0.5, transparent: true});
-    e.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
     e.classList.add('house-blueprint');
     e.setAttribute('static-body','');
+    document.querySelector('#collectibles').appendChild(e);
     return e;
   }
-  collRoot.appendChild(e);
+
+  // Basic visual representation for other items
+  if(type==='stick') {
+    e.innerHTML=`<a-box color="#7a522a" depth="0.05" height="0.15" width="0.6" position="0 ${halfHeight} 0"></a-box>`;
+  } else if(type==='rock') {
+    e.innerHTML=`<a-sphere color="#777" radius="${halfHeight*1.1}" position="0 ${halfHeight} 0"></a-sphere>`;
+  } else if(type==='mushroom') {
+    e.innerHTML=`<a-cylinder color="#cfa07f" height="0.18" radius="0.05" position="0 0.09 0"></a-cylinder><a-sphere color="#ff3154" radius="0.15" position="0 0.22 0"></a-sphere>`;
+  } else if(type==='potion') {
+    e.innerHTML=`<a-cylinder color="#d45e5e" height="0.5" radius="0.15" position="0 ${halfHeight} 0"></a-cylinder>`;
+  } else if(type==='water') {
+    e.innerHTML=`<a-cylinder color="#3bb4ff" height="0.8" radius="0.2" position="0 ${halfHeight} 0"></a-cylinder>`;
+  } else if(type==='stone-axe') {
+    e.innerHTML=`<a-box color="#888" depth="0.2" height="0.6" width="0.15" position="0 ${halfHeight*1.5} 0"></a-box>`;
+  } else if(type==='wood-staff') {
+    e.innerHTML=`<a-cylinder color="#6c4f2a" height="1.2" radius="0.05" position="0 ${halfHeight} 0"></a-cylinder>`;
+  } else if(type==='planks') {
+    e.innerHTML=`<a-box color="#d2a679" depth="0.03" height="0.2" width="0.8" position="0 ${halfHeight} 0"></a-box>`;
+  } else if(type==='ruby') {
+    e.innerHTML = `<a-sphere color="#e8006f" radius="${halfHeight}" position="0 ${halfHeight} 0"></a-sphere>`;
+  } else if (type === 'ruby-necklace') {
+    e.innerHTML = `<a-entity geometry="primitive:torus; radius:0.15; radius-tubular-start:0.05; radius-tubular-end:0.05;" material="color: #e8006f; shader: flat; emissive: #e8006f;" rotation="90 0 0"></a-entity>`;
+  }
+  e.setAttribute('dynamic-body',`mass:0.2;shape:${type=='stick'||type=='planks'||type=='house'?'box':type=='mushroom'?'box':'sphere'};linearDamping:0.9;angularDamping:0.9;allowSleep:true;`);
+  document.querySelector('#collectibles').appendChild(e);
+  return e;
 }
+
+// Initial seeding of resources
 function seedBasics(){
-  for(let i=0;i<7;i++) spawnCollectible('stick',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
-  for(let i=0;i<5;i++) spawnCollectible('rock',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
-  for(let i=0;i<4;i++) spawnCollectible('mushroom',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
+  for(let i=0;i<7;i++) spawnResource('stick',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
+  for(let i=0;i<5;i++) spawnResource('rock',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
+  for(let i=0;i<4;i++) spawnResource('mushroom',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
 }
-seedBasics();
+
 
 // ========== ENEMIES ==========
 const enemiesRoot=document.querySelector('#enemies');
@@ -503,7 +555,7 @@ function spawnEnemies(count, minDist){
   updateEnemyCount();
 }
 
-// ================= IMPROVED ENEMY DEATH =================
+// ========== IMPROVED ENEMY DEATH =================
 function onEnemyDeath(e, source){
   if(!e.__data || e.__data.awarded) return;
   e.__data.awarded = true;
@@ -523,11 +575,12 @@ function onEnemyDeath(e, source){
   let droppedItem = false;
   if (Math.random() < CONFIG.ENEMY_ITEM_DROP_CHANCE) {
     for(let i=0; i < CONFIG.ENEMY_ITEM_DROP_AMOUNT; i++) {
-      spawnCollectible(CONFIG.ENEMY_ITEM_DROP_TYPE, {x:pos.x, z:pos.z});
+      // Use spawnResource for dropping loot to enable potential future respawning of specific loot types
+      spawnResource(CONFIG.ENEMY_ITEM_DROP_TYPE, {x:pos.x, z:pos.z});
       droppedItem = true;
     }
   }
-  if (droppedItem) showFloatingText('Ruby!', pos, '#e8006f');
+  if (droppedItem) showFloatingText('Loot dropped!', pos, '#e8006f'); // You can customize this message!
 
   setTimeout(()=>{ if(e.parentNode) e.parentNode.removeChild(e); }, 500);
   updateEnemyCount();
@@ -594,26 +647,45 @@ function updateEnemies(dt){
 }
 
 // ========== UI/REFRESH ==========
+const invGrid = document.getElementById('inv-grid');
+const craftingList = document.getElementById('craft-list');
+
 function updateRubyBar(){ document.getElementById('rubyCount').textContent = state.inventory.ruby || 0; }
-function refreshUI(){
-  document.getElementById('hpBar').style.width=(state.hp/state.hpMax*100)+'%';
-  document.getElementById('stamBar').style.width=(state.stamina/state.staminaMax*100)+'%';
-  document.getElementById('manaBar').style.width=(state.mana/state.manaMax*100)+'%';
-  document.getElementById('hpText').textContent=`${Math.round(state.hp)}/${state.hpMax}`;
-  document.getElementById('stamText').textContent=`${Math.round(state.stamina)}/${state.staminaMax}`;
-  document.getElementById('manaText').textContent=`${Math.round(state.mana)}/${state.manaMax}`;
-  document.getElementById('hydration').textContent=`${Math.round(state.hydration)}%`;
-  document.getElementById('food').textContent=`${Math.round(state.food)}%`;
-  document.getElementById('xp').textContent=state.xp;
-  document.getElementById('xpMax').textContent=state.xpMax;
-  document.getElementById('level').textContent=state.level;
-  document.getElementById('quest').textContent=state.quest;
-  document.getElementById('equipped').textContent=state.equipped? (state.equipped==='wood-staff'?'Wood Staff':'Stone Axe') : 'None';
-  document.getElementById('xp_small').textContent = state.xp;
-  updateRubyBar();
-  updateEnemyCount();
-  document.getElementById('status').textContent = state.isDead ? 'Dead' : (player.__grounded ? (sprinting ? 'Sprinting' : 'Idle') : 'In Air');
+
+// Function to get item icon URL from assets
+function getItemIconUrl(itemType) {
+  const assetElement = document.querySelector(`img#icon-${itemType}`);
+  return assetElement ? assetElement.src : 'https://cdn-icons-png.flaticon.com/512/184/184400.png'; // Generic fallback icon
 }
+
+// Function to render the inventory slots in the backpack
+function renderInventorySlots() {
+  invGrid.innerHTML = ''; // Clear existing slots
+  const maxSlots = 36; // Example: 6x6 grid
+
+  for (let i = 0; i < maxSlots; i++) {
+    const slot = document.createElement('div');
+    slot.classList.add('slot');
+    slot.dataset.index = i; // Store index for potential future use
+
+    // Check if an item should be displayed in this slot
+    const inventoryItems = Object.entries(state.inventory).filter(([type, count]) => count > 0);
+    if (i < inventoryItems.length) {
+      const [itemType, quantity] = inventoryItems[i];
+      slot.innerHTML = `
+        <img src="${getItemIconUrl(itemType)}" alt="${itemType}">
+        <div class="qty">${quantity}</div>
+      `;
+    }
+    invGrid.appendChild(slot);
+  }
+}
+
+// Call this whenever the inventory might have changed (pickup, craft, etc.)
+function updateInventoryDisplay() {
+  renderInventorySlots();
+}
+
 function logInfo(message) {
   const infolog = document.getElementById('infolog');
   const messageElement = document.createElement('div');
@@ -641,6 +713,28 @@ function checkLevelUp(){
   refreshUI();
 }
 
+function refreshUI(){
+  document.getElementById('hpBar').style.width=(state.hp/state.hpMax*100)+'%';
+  document.getElementById('stamBar').style.width=(state.stamina/state.staminaMax*100)+'%';
+  document.getElementById('manaBar').style.width=(state.mana/state.manaMax*100)+'%';
+  document.getElementById('hpText').textContent=`${Math.round(state.hp)}/${state.hpMax}`;
+  document.getElementById('stamText').textContent=`${Math.round(state.stamina)}/${state.staminaMax}`;
+  document.getElementById('manaText').textContent=`${Math.round(state.mana)}/${state.manaMax}`;
+  document.getElementById('hydration').textContent=`${Math.round(state.hydration)}%`;
+  document.getElementById('food').textContent=`${Math.round(state.food)}%`;
+  document.getElementById('xp').textContent=state.xp;
+  document.getElementById('xpMax').textContent=state.xpMax;
+  document.getElementById('level').textContent=state.level;
+  document.getElementById('quest').textContent=state.quest;
+  document.getElementById('equipped').textContent=state.equipped? (state.equipped==='wood-staff'?'Wood Staff':'Stone Axe') : 'None';
+  document.getElementById('xp_small').textContent = state.xp;
+  updateRubyBar();
+  updateEnemyCount();
+  document.getElementById('status').textContent = state.isDead ? 'Dead' : (player.__grounded ? (sprinting ? 'Sprinting' : 'Idle') : 'In Air');
+  updateInventoryDisplay(); // Ensure inventory is shown correctly
+}
+
+
 // ========== START BUTTON ==========
 let gameStarted = false;
 let enemiesSpawned = false;
@@ -650,7 +744,7 @@ document.getElementById('start-btn').onclick = () => {
   if (gameStarted) return;
   document.getElementById('intro').style.display='none';
   gameStarted = true;
-  refreshUI();
+  refreshUI(); // Initial UI refresh
 
   const sceneEl = document.querySelector('a-scene');
   function doSpawn() {
@@ -703,17 +797,19 @@ function startClimbAtHit(hit) {
     rootObj = rootObj.parent;
   }
   const box = new THREE.Box3().setFromObject(rootObj);
-  if (!box || box.isEmpty && !box.isEmpty()) {
+  if (!box || box.isEmpty && !box.isEmpty()) { // Check for valid bounding box
     return false;
   }
   const topY = box.max.y;
   const hitPoint = hit.point.clone();
   const margin = 0.15;
+  // Ensure the horizontal target position is within the object's bounds
   const targetX = Math.max(box.min.x + margin, Math.min(box.max.x - margin, hitPoint.x));
   const targetZ = Math.max(box.min.z + margin, Math.min(box.max.z - margin, hitPoint.z));
   const currentFeetY = player.object3D.position.y;
   const desiredFeetY = topY + CONFIG.PLAYER_GROUND_Y;
-  if (desiredFeetY <= currentFeetY + 0.01) {
+
+  if (desiredFeetY <= currentFeetY + 0.01) { // Already at or above the top
     logInfo("Already at or above the object's top.");
     return false;
   }
@@ -751,8 +847,8 @@ document.addEventListener('keydown',e=>{
       logInfo("Can't start climbing while in the air.");
     } else {
       const raycaster = rayFromCam(2.0);
-      const staticObjs = [...document.querySelectorAll('[static-body]')].map(el => el.object3D).filter(Boolean);
-      const hits = raycaster.intersectObjects(staticObjs, true);
+      const staticObjs = [...document.querySelectorAll('[static-body]')].filter(el => !el.classList.contains('building')); // Avoid climbing buildings
+      const hits = raycaster.intersectObjects(staticObjs.map(el => el.object3D), true);
       if(hits.length > 0){
         const firstHit = hits[0];
         const didStart = startClimbAtHit(firstHit);
@@ -788,26 +884,24 @@ let playerAttackCooldown = 0;
 document.addEventListener('mousedown', (e) => {
   if(!gameStarted) return;
   if(state.isDead) return;
-  // Right click fireball handled elsewhere
-  if (e.button === 0) {
-    // If building mode, place building
+  if (e.button === 0) { // Left click
     if (buildModeActive) {
       e.preventDefault();
-      if (state.inventory.house > 0) {
+      if ((state.inventory.house || 0) > 0) {
         placeBuilding('house');
       } else {
         showPrompt("You need to craft a house first!");
       }
       return;
     }
-    // Otherwise, attack (melee)
     meleeAttack();
   }
 });
+
 document.addEventListener('mousedown',e=>{
   if(!gameStarted) return;
   if(state.isDead) return;
-  if(e.button === 2){
+  if(e.button === 2){ // Right click
     if(state.equipped === 'wood-staff' && state.knownSpells.has('fireball') && (state.inventory.fireball||0)>0 && state.mana >= CONFIG.FIREBALL_MANA_COST){
       shootFireball();
     }
@@ -1010,7 +1104,7 @@ function handlePlayerDeath(){
     const p = player.object3D.position;
     // spawn some rubies around player
     for(let i=0;i<droppedRubies;i++){
-      spawnCollectible('ruby',{x: p.x + (Math.random()-0.5)*1.5, z: p.z + (Math.random()-0.5)*1.5});
+      spawnResource('ruby',{x: p.x + (Math.random()-0.5)*1.5, z: p.z + (Math.random()-0.5)*1.5});
     }
   }
   refreshUI();
@@ -1075,28 +1169,43 @@ function interactPickup(){
   if(state.isDead) return false;
   const p=player.object3D.position;
   let nearest=null, nd=9e9;
-  [...collRoot.children].forEach(c=>{
-    const cp=c.object3D.position; const d=Math.hypot(cp.x-p.x, cp.z-p.z);
-    if(d<1.6 && d<nd){ nd=d; nearest=c; }
+  // Iterate through active resources to find the closest pickup
+  activeResources.forEach(res => {
+    if (!res || !res.parentNode) return; // Skip if resource is invalid or removed
+    const cp=res.object3D.position; const d=Math.hypot(cp.x-p.x, cp.z-p.z);
+    if(d<1.6 && d<nd){ nd=d; nearest=res; }
   });
+
   if(nearest){
     const t=nearest.__type;
     if(t === 'ruby') {
       state.inventory.ruby = (state.inventory.ruby||0)+1;
+      // Remove from active resources and trigger respawn
+      activeResources.delete(nearest);
       nearest.parentNode&&nearest.parentNode.removeChild(nearest);
       refreshUI();
       logInfo('Picked up a ruby! ✨');
       return true;
     }
     state.inventory[t]=(state.inventory[t]||0)+1;
+    // Remove from active resources and trigger respawn
+    activeResources.delete(nearest);
     nearest.parentNode&&nearest.parentNode.removeChild(nearest);
     refreshUI();
     logInfo(`Picked up a ${t}.`);
     return true;
   }
-  for(const id of ['pond1','pond2']){
-    const po=document.getElementById(id).object3D.position; const d=Math.hypot(po.x-p.x, po.z-p.z);
-    if(d<2){ state.inventory.water=(state.inventory.water||0)+1; refreshUI(); logInfo('Collected some water. 💧'); return true; }
+  // Check ponds for water
+  for(let i=0; i<document.querySelectorAll('a-circle.clickable').length; i++){
+    const pond=document.querySelectorAll('a-circle.clickable')[i];
+    const po=pond.object3D.position; const d=Math.hypot(po.x-p.x, po.z-p.z);
+    if(d<2){
+      state.inventory.water=(state.inventory.water||0)+1;
+      // Water is not a collectible entity, so no respawn logic here unless you make it one.
+      refreshUI();
+      logInfo('Collected some water. 💧');
+      return true;
+    }
   }
   return false;
 }
@@ -1138,7 +1247,7 @@ window.buyShopItem = function(id){
 window.openSellMenu = function(){
   let msg = 'Sell Items for Rubies:<br>';
   Object.keys(state.inventory).forEach(k=>{
-    if(state.inventory[k]>0 && k!=='ruby'){
+    if(state.inventory[k]>0 && k!=='ruby' && k !== 'fireball'){ // Don't sell fireballs or rubies
       msg += `${k} x${state.inventory[k]} <button onclick="window.sellItem('${k}')">Sell</button><br>`;
     }
   });
@@ -1196,44 +1305,44 @@ document.getElementById('up-mana').addEventListener('click', () => upgradeStat('
 const backpack = document.getElementById('backpack');
 const moreBtn = document.getElementById('more-btn');
 const closeBpBtn = document.getElementById('close-bp');
-moreBtn.addEventListener('click', () => {
-  backpack.classList.add('open');
-  logInfo("Opened backpack.");
-});
-closeBpBtn.addEventListener('click', () => {
-  backpack.classList.remove('open');
-  logInfo("Closed backpack.");
-});
 
-// ========== CRAFTING RECIPES ==========
-const craftingList = document.getElementById('craft-list');
-const recipes = [
-  { id: 'planks', name: 'Planks', materials: { stick: 2, rock: 1 }, icon: 'https://cdn-icons-png.flaticon.com/512/264/264918.png' },
-  { id: 'wood-staff', name: 'Wood Staff', materials: { stick: 3 }, icon: 'https://img.icons8.com/ios-filled/50/000000/wizard-staff.png' },
-  { id: 'stone-axe', name: 'Stone Axe', materials: { stick: 3, rock: 3 }, icon: 'https://img.icons8.com/ios-glyphs/50/000000/axe.png' },
-  { id: 'potion', name: 'Health Potion', materials: { mushroom: 2, water: 1 }, icon: 'https://img.icons8.com/ios-glyphs/50/000000/potion.png' },
-  { id: 'house', name: 'House', materials: { planks: 10, rock: 5 }, icon: 'https://img.icons8.com/ios-filled/50/000000/house.png' }
-];
-
+// Render crafting recipes based on current inventory
 function renderCraftingRecipes() {
-  craftingList.innerHTML = '';
+  craftingList.innerHTML = ''; // Clear existing list
   recipes.forEach(recipe => {
     const recipeElement = document.createElement('div');
     recipeElement.classList.add('craft-row');
+
+    let canCraft = true;
+    let materialString = getMaterialCostString(recipe.materials);
+    for (const [material, count] of Object.entries(recipe.materials)) {
+      if ((state.inventory[material] || 0) < count) {
+        canCraft = false;
+        break;
+      }
+    }
+
     recipeElement.innerHTML = `
       <div class="craft-left">
-        <img src="${recipe.icon}" alt="${recipe.name}">
+        <img src="${getItemIconUrl(recipe.id)}" alt="${recipe.name}">
         <span>${recipe.name}</span>
       </div>
-      <button onclick="craftItem('${recipe.id}')" class="ui-clickable">Craft (${getMaterialCostString(recipe.materials)})</button>
+      <button onclick="craftItem('${recipe.id}')" class="ui-clickable" style="${!canCraft ? 'opacity: 0.5; cursor: not-allowed;' : ''}">
+        Craft (${materialString})
+      </button>
     `;
     craftingList.appendChild(recipeElement);
   });
 }
-function getMaterialCostString(materials) { return Object.entries(materials).map(([item, count]) => `${item} x${count}`).join(', '); }
+
+function getMaterialCostString(materials) {
+  return Object.entries(materials).map(([item, count]) => `${item} x${count}`).join(', ');
+}
+
 function craftItem(itemId) {
   const recipe = recipes.find(r => r.id === itemId);
   if (!recipe) return;
+
   let canCraft = true;
   for (const [material, count] of Object.entries(recipe.materials)) {
     if ((state.inventory[material] || 0) < count) {
@@ -1241,18 +1350,48 @@ function craftItem(itemId) {
       break;
     }
   }
+
   if (canCraft) {
     for (const [material, count] of Object.entries(recipe.materials)) {
       state.inventory[material] -= count;
     }
     state.inventory[itemId] = (state.inventory[itemId] || 0) + 1;
-    refreshUI();
     logInfo(`Crafted ${recipe.name}!`);
+    refreshUI(); // Refresh UI to update inventory and counts
   } else {
     showPrompt(`Not enough materials to craft ${recipe.name}.`);
   }
 }
+
+
+moreBtn.addEventListener('click', () => {
+    backpack.classList.add('open');
+    logInfo("Opened backpack.");
+    renderCraftingRecipes(); // Update recipe display when opening backpack
+    updateInventoryDisplay(); // Ensure inventory display is fresh
+});
+closeBpBtn.addEventListener('click', () => {
+  backpack.classList.remove('open');
+  logInfo("Closed backpack.");
+});
+
+
+// ========== CRAFTING RECIPES DEFINITION ==========
+const recipes = [
+  // --- Original Recipes ---
+  { id: 'planks', name: 'Planks', materials: { stick: 2, rock: 1 } },
+  { id: 'wood-staff', name: 'Wood Staff', materials: { stick: 3 } },
+  { id: 'stone-axe', name: 'Stone Axe', materials: { stick: 3, rock: 3 } },
+  { id: 'potion', name: 'Health Potion', materials: { mushroom: 2, water: 1 } },
+  { id: 'house', name: 'House', materials: { planks: 10, rock: 5 } },
+  // --- NEW RECIPE EXAMPLE: Ruby Necklace ---
+  { id: 'ruby-necklace', name: 'Ruby Necklace', materials: { ruby: 2, planks: 1 } },
+  // --- Add more recipes here as needed ---
+];
+
+// Ensure recipes are rendered when the game starts
 document.getElementById('start-btn').addEventListener('click', renderCraftingRecipes);
+
 
 // ========== BUILDING SYSTEM ==========
 let placedBuildings = [];
@@ -1263,9 +1402,10 @@ function showBuildingPreview(buildingType) {
   }
   currentBuildingPreview = document.createElement('a-entity');
   currentBuildingPreview.setAttribute('id', 'build-preview');
+  // Use a default box geometry; specific assets can be added later
   currentBuildingPreview.setAttribute('geometry', { primitive: 'box', width: 4, height: 3, depth: 4 });
   currentBuildingPreview.setAttribute('material', { src: '#houseTex', opacity: 0.4, transparent: true });
-  currentBuildingPreview.setAttribute('position', '0 100 0');
+  currentBuildingPreview.setAttribute('position', '0 100 0'); // Initial off-screen position
   currentBuildingPreview.style.display = 'block';
   document.querySelector('a-scene').appendChild(currentBuildingPreview);
 }
@@ -1282,76 +1422,97 @@ function updateBuildingPreview() {
   const groundY = getGroundYAt(ray.origin.x, ray.origin.z);
   const previewPos = {
     x: ray.origin.x,
-    y: groundY + CONFIG.BUILD_MODE_OFFSET_Y + 1.5,
+    y: groundY + CONFIG.BUILD_MODE_OFFSET_Y + 1.5, // Adjust Y based on object's height center
     z: ray.origin.z
   };
   const collision = checkBuildingCollision(previewPos);
   if (collision) {
-    currentBuildingPreview.setAttribute('material', 'opacity', 0.2);
+    currentBuildingPreview.setAttribute('material', 'opacity', 0.2); // Indicate invalid placement
   } else {
-    currentBuildingPreview.setAttribute('material', 'opacity', 0.4);
+    currentBuildingPreview.setAttribute('material', 'opacity', 0.4); // Indicate valid placement
   }
-  currentBuildingPreview.setAttribute('position', `${previewPos.x} ${previewPos.y} ${previewPos.z}`);
+  currentBuildingPreview.setAttribute('position', `${previewPos.x} ${previewPos.y} ${pos.z}`);
 }
 
 function checkBuildingCollision(pos) {
-  const buildingSize = { width: 4, height: 3, depth: 4 };
-  const buffer = 0.2;
+  const buildingSize = { width: 4, height: 3, depth: 4 }; // Assumed size of the house
+  const buffer = 0.2; // Small buffer to avoid precision issues
+
+  // Check if the building would be too low
   if (pos.y < CONFIG.PLAYER_GROUND_Y + buildingSize.height / 2) return true;
+
   const collisionRaycaster = new THREE.Raycaster();
   const halfSize = new THREE.Vector3(buildingSize.width / 2, buildingSize.height / 2, buildingSize.depth / 2);
+
+  // Check collision points around the base and top center
   const testPoints = [
     new THREE.Vector3(pos.x - halfSize.x + buffer, pos.y, pos.z - halfSize.z + buffer),
     new THREE.Vector3(pos.x + halfSize.x - buffer, pos.y, pos.z - halfSize.z + buffer),
     new THREE.Vector3(pos.x - halfSize.x + buffer, pos.y, pos.z + halfSize.z - buffer),
     new THREE.Vector3(pos.x + halfSize.x - buffer, pos.y, pos.z + halfSize.z - buffer),
-    new THREE.Vector3(pos.x, pos.y + halfSize.y - buffer, pos.z)
+    new THREE.Vector3(pos.x, pos.y + halfSize.y - buffer, pos.z) // Check center top
   ];
+
   for (const testPoint of testPoints) {
-    const origin = new THREE.Vector3(testPoint.x, 20, testPoint.z);
+    const origin = new THREE.Vector3(testPoint.x, 20, testPoint.z); // Ray starts high above
     const direction = new THREE.Vector3(0, -1, 0);
-    collisionRaycaster.set(origin, direction, 0, 30);
-    const staticNodes = [...document.querySelectorAll('[static-body]')].map(el => el.object3D);
+    collisionRaycaster.set(origin, direction, 0, 30); // Raycast downwards
+    // Consider only static bodies that are not part of the preview itself
+    const staticNodes = [...document.querySelectorAll('[static-body]')].map(el => el.object3D).filter(obj => obj && obj.el !== currentBuildingPreview);
     const hits = collisionRaycaster.intersectObjects(staticNodes, true);
-    if (hits.length > 0 && hits[0].point.y > testPoint.y - buffer) {
-      return true;
+
+    if (hits.length > 0) {
+      // If a hit occurs and it's above the test point's intended Y position (with buffer)
+      if (hits[0].point.y > testPoint.y - buffer) {
+        return true; // Collision detected
+      }
     }
   }
-  return false;
+  return false; // No collision detected
 }
 
 function placeBuilding(buildingType) {
-  if (!buildModeActive || !currentBuildingPreview) return;
+  if (!buildModeActive || !currentBuildingPreview || currentBuildingPreview.style.display === 'none') return;
   const pos = currentBuildingPreview.object3D.position;
   if (checkBuildingCollision({x: pos.x, y: pos.y, z: pos.z})) {
     showPrompt("Cannot place building here - collision detected!");
     return;
   }
-  state.inventory.house--;
-  state.inventory.planks -= 10;
-  state.inventory.rock -= 5;
+  // Deduct materials - assuming 'house' is the only building for now
+  if (state.inventory.house > 0) {
+    state.inventory.house--;
+    state.inventory.planks -= 10;
+    state.inventory.rock -= 5;
+  } else {
+    showPrompt("You don't have a house blueprint!");
+    return;
+  }
+
   const house = document.createElement('a-entity');
   house.setAttribute('geometry', { primitive: 'box', width: 4, height: 3, depth: 4 });
   house.setAttribute('material', { src: '#houseTex', roughness: 1 });
   house.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
   house.setAttribute('static-body', '');
-  house.classList.add('building');
+  house.classList.add('building'); // Add class for collision checks
   document.querySelector('a-scene').appendChild(house);
-  entitiesInScene.add(house);
+  entitiesInScene.add(house); // Track placed entities
   logInfo("House built!");
   refreshUI();
   hideBuildingPreview();
-  buildModeActive = false;
+  buildModeActive = false; // Exit build mode after placing
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  if (gameStarted) {
+  if (gameStarted) { // If game already started on load, ensure preview is handled
     showBuildingPreview('house');
     hideBuildingPreview();
   }
 });
 
 // ========== MISC ==========
+// Initial seeding of resources and setup of initial timers
+seedBasics();
+// Initial UI setup when the page loads
 refreshUI();
 </script>
 </body>
