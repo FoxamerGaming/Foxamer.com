@@ -38,17 +38,17 @@
     const ring = {
       x: canvas.width / 2,
       y: canvas.height / 2 + 40,
-      radius: Math.min(canvas.width, canvas.height) * 0.37
+      radius: Math.min(canvas.width, canvas.height) * 0.55 // Increased radius for bigger and wider battlefield
     };
 
     // Fighter properties
-    function makeFighter(x, y, facing, img) {
+    function makeFighter(x, y, facing, img, speed) {
       return {
         x,
         y,
         width: 110,
         height: 110,
-        speed: 6,
+        speed: speed,
         vx: 0,
         vy: 0,
         color: 'blue',
@@ -67,27 +67,32 @@
 
     // Place fighters on the sumo ring
     const player = makeFighter(
-      ring.x - 100, ring.y + ring.radius/2, 1, playerImg
+      ring.x - 100, ring.y + ring.radius/2, 1, playerImg, 6
     );
     player.color = 'deepskyblue';
 
+    // Spawn enemy at a safer distance
     const enemy = makeFighter(
-      ring.x + 100, ring.y + ring.radius/2, -1, enemyImg
+      ring.x + ring.radius + 200, ring.y + ring.radius/2, -1, enemyImg, 4 // Slower speed
     );
     enemy.color = 'orangered';
     enemy.AI = true;
     enemy.attackCooldown = 60;
 
     // Controls
-    let left, right;
+    let left, right, up, down;
     let attacking = false;
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowLeft') left = true;
-      if (e.key === 'ArrowRight') right = true;
+      if (e.key === 'ArrowLeft' || e.key === 'a') left = true;
+      if (e.key === 'ArrowRight' || e.key === 'd') right = true;
+      if (e.key === 'ArrowUp' || e.key === 'w') up = true;
+      if (e.key === 'ArrowDown' || e.key === 's') down = true;
     });
     document.addEventListener('keyup', (e) => {
-      if (e.key === 'ArrowLeft') left = false;
-      if (e.key === 'ArrowRight') right = false;
+      if (e.key === 'ArrowLeft' || e.key === 'a') left = false;
+      if (e.key === 'ArrowRight' || e.key === 'd') right = false;
+      if (e.key === 'ArrowUp' || e.key === 'w') up = false;
+      if (e.key === 'ArrowDown' || e.key === 's') down = false;
     });
     canvas.addEventListener('mousedown', (e) => {
       if (e.button === 0) attacking = true;
@@ -134,6 +139,7 @@
 
     // Helper: Draw fighter with health bar
     function drawFighter(f) {
+      if (!f.img.complete) return;
       ctx.save();
       // Shadow under fighter
       ctx.globalAlpha = 0.23;
@@ -144,16 +150,11 @@
       ctx.globalAlpha = 1.0;
 
       // Fighter body (draw image if loaded, fallback to colored rect)
-      if (f.img && f.img.complete) {
-        ctx.save();
-        ctx.translate(f.x + f.width/2, f.y + f.height/2);
-        ctx.scale(f.facing, 1);
-        ctx.drawImage(f.img, -f.width/2, -f.height/2, f.width, f.height);
-        ctx.restore();
-      } else {
-        ctx.fillStyle = f.color;
-        ctx.fillRect(f.x, f.y, f.width, f.height);
-      }
+      ctx.save();
+      ctx.translate(f.x + f.width/2, f.y + f.height/2);
+      ctx.scale(f.facing, 1);
+      ctx.drawImage(f.img, -f.width/2, -f.height/2, f.width, f.height);
+      ctx.restore();
 
       // Attack effect
       if (f.isAttacking && f.attackTimer > 0) {
@@ -207,6 +208,10 @@
       else if (input.right) f.vx = f.speed;
       else f.vx *= 0.7;
 
+      if (input.up) f.vy = -f.speed;
+      else if (input.down) f.vy = f.speed;
+      else f.vy *= 0.7;
+
       f.x += f.vx;
       f.y += f.vy;
       f.vx *= 0.85;
@@ -254,18 +259,25 @@
     }
 
     // Enemy AI
-    function enemyAI() {
-      // Chase player if far, else back up a little
+    function enemyAI(enemy, player) {
+      // Chase player
       let dx = player.x - enemy.x;
-      let dist = Math.abs(dx);
-      let input = {left: false, right: false, attack: false};
-      if (dist > 70) input[dx > 0 ? 'right' : 'left'] = true;
-      else if (dist < 45) input[dx > 0 ? 'left' : 'right'] = true;
+      let dy = player.y - enemy.y;
+      let dist = Math.sqrt(dx*dx + dy*dy);
 
-      // Attack if in range and facing player
-      if (dist < enemy.attackRange + 18 && (enemy.facing === (enemy.x < player.x ? 1 : -1))) {
+      let input = {left: false, right: false, up: false, down: false, attack: false};
+
+      if (dist > enemy.attackRange) {
+        if (Math.abs(dx) > Math.abs(dy)) {
+          input[dx > 0 ? 'right' : 'left'] = true;
+        } else {
+          input[dy > 0 ? 'down' : 'up'] = true;
+        }
+      } else {
+        // Attack if in range
         if (enemy.attackCooldown <= 0) input.attack = true;
       }
+
       return input;
     }
 
@@ -280,12 +292,15 @@
       let input = {
         left: !!left,
         right: !!right,
+        up: !!up,
+        down: !!down,
         attack: !!attacking
       };
       updateFighter(player, enemy, input);
 
       // Enemy AI
-      updateFighter(enemy, player, enemyAI());
+      let enemyInput = enemyAI(enemy, player);
+      updateFighter(enemy, player, enemyInput);
 
       // Win condition: health or out of ring
       if (player.health <= 0) { gameOver = true; winner = 'Enemy'; }
@@ -326,7 +341,7 @@
       ctx.fillText("Enemy", canvas.width-150, 34);
       ctx.font = "19px Arial, sans-serif";
       ctx.fillStyle = "#fff";
-      ctx.fillText("Arrows = Move | Left Click = Attack", 145, 32);
+      ctx.fillText("Arrows/WASD = Move | Left Click = Attack", 145, 32);
       ctx.restore();
 
       if (gameOver) {
@@ -358,12 +373,12 @@
       canvas.height = window.innerHeight;
       ring.x = canvas.width/2;
       ring.y = canvas.height/2 + 40;
-      ring.radius = Math.min(canvas.width, canvas.height) * 0.37;
+      ring.radius = Math.min(canvas.width, canvas.height) * 0.55;
       // Fighters repositioned to ring
       if (!gameOver) {
         player.x = ring.x - 100;
         player.y = ring.y + ring.radius/2;
-        enemy.x = ring.x + 100;
+        enemy.x = ring.x + ring.radius + 200;
         enemy.y = ring.y + ring.radius/2;
       }
     });
