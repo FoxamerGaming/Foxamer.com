@@ -7,7 +7,7 @@
     <style>
         body {
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             align-items: center;
             height: 100vh;
             margin: 0;
@@ -24,15 +24,22 @@
             font-size: 24px;
             color: #000;
         }
+        #scoreBoard {
+            margin-top: 10px;
+            font-size: 20px;
+            color: #000;
+        }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas" width="400" height="600"></canvas>
     <div id="startScreen">Press Space to Start</div>
+    <div id="scoreBoard">Score: 0</div>
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const startScreen = document.getElementById('startScreen');
+        const scoreBoard = document.getElementById('scoreBoard');
 
         const gravity = 0.6;
         const bird = {
@@ -96,6 +103,7 @@
 
             if (pipes.length > 0 && pipes[0].x + pipeWidth < bird.x) {
                 score++;
+                scoreBoard.textContent = `Score: ${score}`;
             }
 
             frameCount++;
@@ -126,6 +134,7 @@
             gameStarted = false;
             startScreen.style.display = 'block';
             frameCount = 0;
+            scoreBoard.textContent = `Score: 0`;
         }
 
         function onKeyDown(event) {
