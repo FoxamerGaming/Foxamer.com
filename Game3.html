@@ -1,96 +1,54 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fighting Mini-Game</title>
-  <style>
-    body {
-      margin: 0;
-      overflow: hidden;
-      background-color: #222;
-      color: white;
-      font-family: Arial, sans-serif;
-    }
-    canvas {
-      display: block;
-      margin: auto;
-      background: #444;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Car Racing Game</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+    </style>
 </head>
 <body>
-  <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let scene = new THREE.Scene();
+        let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        let renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
 
-  <script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
+        // Background
+        let backgroundGeometry = new THREE.PlaneGeometry(100, 100);
+        let backgroundMaterial = new THREE.MeshBasicMaterial({ color: 0x87CEEB, side: THREE.DoubleSide });
+        let background = new THREE.Mesh(backgroundGeometry, backgroundMaterial);
+        background.position.set(0, 0, -5);
+        scene.add(background);
 
-    // Game settings
-    const playerWidth = 50, playerHeight = 50;
-    const canvasWidth = canvas.width, canvasHeight = canvas.height;
+        // Racetrack
+        let trackGeometry = new THREE.PlaneGeometry(20, 20);
+        let trackMaterial = new THREE.MeshBasicMaterial({ color: 0x32CD32, side: THREE.DoubleSide });
+        let track = new THREE.Mesh(trackGeometry, trackMaterial);
+        track.position.set(0, 0, 0);
+        scene.add(track);
 
-    // Player objects
-    const player1 = { x: 50, y: canvasHeight - playerHeight, color: 'red', health: 100, speed: 5 };
-    const player2 = { x: canvasWidth - 100, y: canvasHeight - playerHeight, color: 'blue', health: 100, speed: 5 };
+        // Car
+        let carGeometry = new THREE.BoxGeometry(1, 0.5, 2);
+        let carMaterial = new THREE.MeshBasicMaterial({ color: 0xFF0000 });
+        let car = new THREE.Mesh(carGeometry, carMaterial);
+        car.position.set(0, 0.25, 0);
+        scene.add(car);
 
-    // Key states
-    const keys = {};
+        camera.position.z = 10;
+        camera.position.y = 5;
 
-    // Event listeners for key presses
-    window.addEventListener('keydown', (e) => keys[e.key] = true);
-    window.addEventListener('keyup', (e) => keys[e.key] = false);
+        function animate() {
+            requestAnimationFrame(animate);
+            car.rotation.y += 0.02;
+            renderer.render(scene, camera);
+        }
 
-    // Game loop
-    function gameLoop() {
-      ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-
-      // Player 1 controls (WASD)
-      if (keys['w'] && player1.y > 0) player1.y -= player1.speed;
-      if (keys['s'] && player1.y < canvasHeight - playerHeight) player1.y += player1.speed;
-      if (keys['a'] && player1.x > 0) player1.x -= player1.speed;
-      if (keys['d'] && player1.x < canvasWidth - playerWidth) player1.x += player1.speed;
-
-      // Player 2 controls (Arrow keys)
-      if (keys['ArrowUp'] && player2.y > 0) player2.y -= player2.speed;
-      if (keys['ArrowDown'] && player2.y < canvasHeight - playerHeight) player2.y += player2.speed;
-      if (keys['ArrowLeft'] && player2.x > 0) player2.x -= player2.speed;
-      if (keys['ArrowRight'] && player2.x < canvasWidth - playerWidth) player2.x += player2.speed;
-
-      // Draw players
-      ctx.fillStyle = player1.color;
-      ctx.fillRect(player1.x, player1.y, playerWidth, playerHeight);
-
-      ctx.fillStyle = player2.color;
-      ctx.fillRect(player2.x, player2.y, playerWidth, playerHeight);
-
-      // Collision detection for attack
-      if (keys[' '] && Math.abs(player1.x - player2.x) < playerWidth && Math.abs(player1.y - player2.y) < playerHeight) {
-        player2.health -= 1; // Player 1 attacks
-      }
-      if (keys['Enter'] && Math.abs(player2.x - player1.x) < playerWidth && Math.abs(player2.y - player1.y) < playerHeight) {
-        player1.health -= 1; // Player 2 attacks
-      }
-
-      // Display health
-      ctx.fillStyle = 'white';
-      ctx.font = '20px Arial';
-      ctx.fillText(`Player 1 Health: ${player1.health}`, 10, 20);
-      ctx.fillText(`Player 2 Health: ${player2.health}`, canvasWidth - 200, 20);
-
-      // End game if health reaches 0
-      if (player1.health <= 0 || player2.health <= 0) {
-        ctx.fillStyle = 'yellow';
-        ctx.font = '40px Arial';
-        ctx.fillText(player1.health <= 0 ? 'Player 2 Wins!' : 'Player 1 Wins!', canvasWidth / 2 - 150, canvasHeight / 2);
-        return; // Stop the game loop
-      }
-
-      requestAnimationFrame(gameLoop);
-    }
-
-    gameLoop();
-  </script>
+        animate();
+    </script>
 </body>
 </html>
-<p> PLayer 2 has to has to defeate player 1, Player 2 press [Enter] to attack Player 1 use the key arows to move around. With that said Good Luck!</p>
