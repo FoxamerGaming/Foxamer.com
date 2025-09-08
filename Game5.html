@@ -147,6 +147,8 @@
   <div id="hotbar" role="toolbar" aria-label="Hotbar">
     <div class="hotbar-item" data-item="stone-axe" title="Stone Axe"><img id="hb2" alt=""><div class="hotbar-key">1</div></div>
     <div class="hotbar-item" data-item="wood-staff" title="Wood Staff"><img id="hb3" alt=""><div class="hotbar-key">2</div></div>
+    <div class="hotbar-item" data-item="stone-pickaxe" title="Stone Pickaxe"><img id="hb4" alt=""><div class="hotbar-key">3</div></div>
+    <div class="hotbar-item" data-item="stone-sword" title="Stone Sword"><img id="hb5" alt=""><div class="hotbar-key">4</div></div>
     <div id="more-btn" class="ui-clickable" title="Open Backpack">⋯</div>
   </div>
   <div id="backpack">
@@ -740,8 +742,12 @@ function updateRubyBar(){ document.getElementById('rubyCount').textContent = sta
 function setHotbarIconsOnLoad(){
   const hbStoneAxe = document.querySelector('.hotbar-item[data-item="stone-axe"] img');
   const hbStaff = document.querySelector('.hotbar-item[data-item="wood-staff"] img');
+  const hbPick = document.querySelector('.hotbar-item[data-item="stone-pickaxe"] img');
+  const hbSword = document.querySelector('.hotbar-item[data-item="stone-sword"] img');
   if(hbStoneAxe) hbStoneAxe.src = getItemIconUrl('stone-axe');
   if(hbStaff) hbStaff.src = getItemIconUrl('wood-staff');
+  if(hbPick) hbPick.src = getItemIconUrl('stone-pickaxe');
+  if(hbSword) hbSword.src = getItemIconUrl('stone-sword');
 }
 setHotbarIconsOnLoad();
 
@@ -1007,12 +1013,12 @@ document.addEventListener('mousedown', (e) => {
     }
     // Check equipped item for mining/attacking
     if (state.equipped === 'stone-pickaxe') {
-      mineBoulder();
+      if (!mineBoulder()) meleeAttack();
     } else if (state.equipped === 'stone-sword') {
       // First try to mine a bush in front; if none, perform melee attack
       if (!mineBush()) meleeAttack();
     } else if (state.equipped === 'stone-axe') {
-      meleeAttack();
+      if (!chopTree()) meleeAttack();
     } else {
       // Unarmed or other tools just swing
       meleeAttack();
@@ -1059,7 +1065,8 @@ function meleeAttack(){
         // damage calculation
         let dmg = CONFIG.PLAYER_MELEE_BASE_DAMAGE;
         if(state.equipped === 'stone-axe') dmg += 18;
-        else if(state.equipped === 'stone-sword') dmg = 20; // Stone Sword damage
+        else if(state.equipped === 'stone-sword') dmg += 20; // Stone Sword damage
+        else if(state.equipped === 'stone-pickaxe') dmg += 12;
         else if(state.equipped === 'wood-staff') dmg += 6;
 
         e.__data.hp -= dmg;
@@ -1085,7 +1092,7 @@ function meleeAttack(){
 
 // Mine Boulder function
 function mineBoulder() {
-  if (playerAttackCooldown > 0) return;
+  if (playerAttackCooldown > 0) return false;
   playerAttackCooldown = CONFIG.PLAYER_MELEE_COOLDOWN; // Use same cooldown as melee
 
   const raycaster = rayFromCam(2.5); // Mining range
@@ -1116,6 +1123,7 @@ function mineBoulder() {
           clearTimeout(respawnTimers[timerKey]);
           delete respawnTimers[timerKey];
         }
+        scheduleRespawn('boulder', {x:pos.x, z:pos.z}, CONFIG.RESPAWN_DELAY_LARGE);
       }
       refreshUI();
       return true;
@@ -1156,6 +1164,45 @@ function mineBush() {
           clearTimeout(respawnTimers[timerKey]);
           delete respawnTimers[timerKey];
         }
+        scheduleRespawn('bush', {x:pos.x, z:pos.z}, CONFIG.RESPAWN_DELAY_LARGE);
+      }
+      refreshUI();
+      return true;
+    }
+  }
+  return false;
+}
+
+function chopTree() {
+  if (playerAttackCooldown > 0) return false;
+  playerAttackCooldown = CONFIG.PLAYER_MELEE_COOLDOWN;
+
+  const raycaster = rayFromCam(2.2);
+  const hits = raycaster.intersectObjects([...document.querySelectorAll('.tree')].map(el => el.object3D), true);
+
+  if (hits.length > 0) {
+    const tree = hits[0].object.el;
+    if (tree && tree.__data) {
+      tree.__data.hp -= CONFIG.TREE_CHOP_DAMAGE;
+      logInfo(`Chopped tree for ${CONFIG.TREE_CHOP_DAMAGE} damage.`);
+      showFloatingText(`-${CONFIG.TREE_CHOP_DAMAGE}`, tree.object3D.position, '#ff6a6a');
+
+      if (tree.__data.hp <= 0) {
+        logInfo("Tree felled!");
+        const pos = tree.object3D.position;
+        const stickDropCount = 3 + Math.floor(Math.random() * 3); // 3-5 sticks
+        for (let i = 0; i < stickDropCount; i++) {
+          spawnResource('stick', { x: pos.x + (Math.random()-0.5)*0.6, z: pos.z + (Math.random()-0.5)*0.6 });
+        }
+        activeResources.delete(tree);
+        tree.parentNode && tree.parentNode.removeChild(tree);
+
+        const timerKey = `tree-${pos.x.toFixed(2)}x${pos.z.toFixed(2)}`;
+        if (respawnTimers[timerKey]) {
+          clearTimeout(respawnTimers[timerKey]);
+          delete respawnTimers[timerKey];
+        }
+        scheduleRespawn('tree', {x:pos.x, z:pos.z}, CONFIG.RESPAWN_DELAY_LARGE);
       }
       refreshUI();
       return true;
@@ -1426,6 +1473,10 @@ function interactPickup(){
 
   if(nearest){
     const t=nearest.__type; // Get the type of the resource
+    if(['tree','boulder','bush'].includes(t)){
+      logInfo(`This requires mining with a ${t==='tree'?'stone axe':t==='boulder'?'stone pickaxe':'stone sword'}.`);
+      return false;
+    }
     const pos = { x: nearest.object3D.position.x, z: nearest.object3D.position.z }; // Capture current position for timer key
 
     // Logic for different item types
