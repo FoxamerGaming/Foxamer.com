@@ -211,10 +211,13 @@
     <img id="icon-water" src="https://img.icons8.com/ios-glyphs/90/000000/water-bottle.png" crossorigin="anonymous">
     <img id="icon-wood-staff" src="https://img.icons8.com/ios-filled/90/000000/wizard-staff.png" crossorigin="anonymous">
     <img id="icon-stone-axe" src="https://img.icons8.com/ios-glyphs/90/000000/axe.png" crossorigin="anonymous">
+    <img id="icon-stone-pickaxe" src="https://img.icons8.com/ios-glyphs/90/000000/mining-pickaxe.png" crossorigin="anonymous">
+    <img id="icon-stone-sword" src="https://img.icons8.com/ios-filled/90/000000/sword.png" crossorigin="anonymous">
     <img id="icon-planks" src="https://img.icons8.com/ios-glyphs/90/000000/wood.png" crossorigin="anonymous">
     <img id="icon-house" src="https://img.icons8.com/ios-filled/90/000000/house.png" crossorigin="anonymous">
     <img id="icon-ruby" src="https://cdn-icons-png.flaticon.com/128/1997/1997928.png" crossorigin="anonymous">
     <img id="icon-ruby-necklace" src="https://cdn-icons-png.flaticon.com/512/1049/1049753.png" crossorigin="anonymous">
+    <img id="icon-fireball" src="https://img.icons8.com/fluency/96/000000/fireball.png" crossorigin="anonymous">
   </a-assets>
   <a-entity light="type:ambient; color:#bbb; intensity:0.8" id="ambientLight"></a-entity>
   <a-entity light="type:directional; intensity:1" position="5 12 -3" rotation="-45 30 0" shadow="cast:true"></a-entity>
@@ -267,17 +270,23 @@ const state = {
   mana:60, manaMax:60,
   hydration:100, food:100,
   xp:0, xpMax:100, level:1,
-  equipped:'', // 'stone-axe' or 'wood-staff'
+  equipped:'', // 'stone-axe' or 'wood-staff' or 'stone-pickaxe' or 'stone-sword'
   spells:[{id:'spark',name:'Spark',charges:0,max:3,dmg:15,cost:5}],
   knownSpells:new Set(['spark']),
   quest:'Talk to the Forest Elder',
-  inventory:{ stick:0, rock:0, mushroom:0, potion:0, water:0, 'wood-staff':0, 'stone-axe':0, planks:0, house:0, ruby:0, fireball:0, 'ruby-necklace':0 },
+  inventory:{ stick:0, rock:0, mushroom:0, potion:0, water:0, 'wood-staff':0, 'stone-axe':0, 'stone-pickaxe':0, 'stone-sword':0, planks:0, house:0, ruby:0, fireball:0, 'ruby-necklace':0 },
   isDead:false
 };
+
 const shopItems = [
   {id:'food', name:'Food', price:3},
   {id:'armour', name:'Armour', price:7}
 ];
+
+// ========== GLOBAL RESPawn MANAGERS =========
+const respawnTimers = {}; // Stores setTimeout IDs for respawns
+const activeResources = new Set(); // Tracks collectible entities currently in scene
+
 const CONFIG = {
   WALK_SPEED: 2.2,
   SPRINT_SPEED: 3.8,
@@ -309,54 +318,15 @@ const CONFIG = {
   PLAYER_MELEE_COOLDOWN: 0.6,
   PLAYER_MELEE_BASE_DAMAGE: 10,
 
+  // Bush specific
+  BUSH_HP: 20,
+  BUSH_HIT_DAMAGE: 10, // damage dealt to bush when hitting with sword
+
   // Respawn Timers (in seconds)
-  RESPAWN_DELAY_SHORT: 120, // 2 minutes for small items
-  RESPAWN_DELAY_MEDIUM: 180, // 3 minutes for medium items
-  RESPAWN_DELAY_LARGE: 300, // 5 minutes for larger/complex items
+  RESPAWN_DELAY_SHORT: 120, // 2 minutes for mushrooms, sticks, rocks
+  RESPAWN_DELAY_MEDIUM: 180, // 3 minutes for potions
+  RESPAWN_DELAY_LARGE: 300, // 5 minutes for trees, boulders, bushes
 };
-
-// Global object to manage respawn timers
-const respawnTimers = {};
-const activeResources = new Set(); // To keep track of currently spawned items
-
-// Function to spawn a single resource item
-function spawnResource(type, pos) {
-  const resource = spawnCollectible(type, pos); // Use existing spawn function
-  if (resource) {
-    activeResources.add(resource);
-    // Schedule respawn
-    let delay = CONFIG.RESPAWN_DELAY_SHORT;
-    if (type === 'tree' || type === 'boulder' || type === 'bush') { // Assign delays based on type
-      delay = CONFIG.RESPAWN_DELAY_LARGE;
-    }
-    scheduleRespawn(type, pos, delay);
-  }
-}
-
-// Function to schedule a respawn for a resource
-function scheduleRespawn(type, pos, delay) {
-  // Create a unique key for each potential spawn point to avoid conflicts
-  // Using a simple string concatenation with fixed precision for position
-  const timerKey = `${type}-${pos.x.toFixed(2)}x${pos.z.toFixed(2)}`;
-
-  if (respawnTimers[timerKey]) clearTimeout(respawnTimers[timerKey]); // Clear if already scheduled
-
-  respawnTimers[timerKey] = setTimeout(() => {
-    // Before spawning, check if an item of this type already exists at the location (e.g., picked up before timer expired)
-    // This check is basic; a more robust system might check bounding boxes.
-    let itemAlreadyPresent = false;
-    activeResources.forEach(res => {
-      if (res && res.__type === type && Math.hypot(res.object3D.position.x - pos.x, res.object3D.position.z - pos.z) < 0.5) {
-        itemAlreadyPresent = true;
-      }
-    });
-
-    if (!itemAlreadyPresent) {
-      spawnResource(type, pos);
-    }
-    delete respawnTimers[timerKey]; // Clean up timer after execution
-  }, delay * 1000);
-}
 
 
 // ========== UTILITY FUNCTIONS =========
@@ -378,7 +348,7 @@ function rayFromCam(distance = Infinity){
 }
 function getTargetEntity(){
   const ray = rayFromCam(20);
-  const entities = [...document.querySelectorAll('.clickable'), ...document.querySelectorAll('.tree'), ...document.querySelectorAll('[data-boulder]')];
+  const entities = [...document.querySelectorAll('.clickable'), ...document.querySelectorAll('.tree'), ...document.querySelectorAll('[data-boulder]'), ...document.querySelectorAll('.bush')];
   const hits = ray.intersectObjects(entities.map(e => e.object3D), true);
   if(hits.length > 0) return hits[0].object.el;
   return null;
@@ -398,6 +368,73 @@ function showFloatingText(msg, pos, color='#fff') {
 }
 
 // ========== WORLD SPAWNS =========
+
+// Function to spawn a single resource item and schedule its respawn
+function spawnResource(type, pos) {
+  // Handle special resource types that are not standard 'collectibles'
+  if (type === 'boulder') {
+    const res = spawnBoulder(pos.x, pos.z);
+    if (res) {
+      activeResources.add(res);
+      scheduleRespawn('boulder', pos, CONFIG.RESPAWN_DELAY_LARGE);
+    }
+    return;
+  }
+  if (type === 'bush') {
+    const res = spawnBush(pos.x, pos.z);
+    if (res) {
+      activeResources.add(res);
+      scheduleRespawn('bush', pos, CONFIG.RESPAWN_DELAY_LARGE);
+    }
+    return;
+  }
+  if (type === 'tree') {
+    const res = spawnTree(pos.x, pos.z, CONFIG.TREE_HP);
+    if (res) {
+      activeResources.add(res);
+      scheduleRespawn('tree', pos, CONFIG.RESPAWN_DELAY_LARGE);
+    }
+    return;
+  }
+
+  const resource = spawnCollectible(type, pos); // Use existing spawn function
+  if (resource) {
+    activeResources.add(resource);
+    // Schedule respawn based on item type
+    let delay = CONFIG.RESPAWN_DELAY_SHORT; // Default to short delay (now 2 minutes)
+    if (type === 'tree' || type === 'boulder' || type === 'bush') {
+      delay = CONFIG.RESPAWN_DELAY_LARGE; // Trees, boulders, bushes have a longer respawn time
+    } else if (type === 'potion') {
+      delay = CONFIG.RESPAWN_DELAY_MEDIUM;
+    }
+    scheduleRespawn(type, pos, delay);
+  }
+}
+
+// Function to schedule a respawn for a resource
+function scheduleRespawn(type, pos, delay) {
+  // Create a unique key for each potential spawn point
+  const timerKey = `${type}-${pos.x.toFixed(2)}x${pos.z.toFixed(2)}`;
+
+  if (respawnTimers[timerKey]) clearTimeout(respawnTimers[timerKey]); // Clear if already scheduled
+
+  respawnTimers[timerKey] = setTimeout(() => {
+    // Check if an item of this type already exists at the location before respawning
+    let itemAlreadyPresent = false;
+    activeResources.forEach(res => {
+      if (res && res.__type === type && Math.hypot(res.object3D.position.x - pos.x, res.object3D.position.z - pos.z) < 0.5) {
+        itemAlreadyPresent = true;
+      }
+    });
+
+    if (!itemAlreadyPresent) {
+      spawnResource(type, pos); // Respawns the item by calling spawnResource again
+    }
+    delete respawnTimers[timerKey]; // Clean up timer after execution
+  }, delay * 1000);
+}
+
+
 function ringMountains(){
   const ring=[
     [-100,-40],[-75,-75],[-40,-105],[0,-115],[40,-105],[75,-75],[100,-40],
@@ -417,56 +454,87 @@ function ringMountains(){
     root.appendChild(m);
   });
 }
-function spawnTree(x,z,hp=30){
-  const ent=document.createElement('a-entity'); ent.setAttribute('position',`${x} 0 ${z}`); ent.classList.add('tree'); ent.setAttribute('static-body','');
-  const trunk=document.createElement('a-cylinder'); trunk.setAttribute('height','2'); trunk.setAttribute('radius','0.25'); trunk.setAttribute('color','#8B5A2B'); trunk.setAttribute('position','0 1 0'); trunk.setAttribute('material','src:#bark; roughness:1');
+// --- Tree spawning function ---
+function spawnTree(x,z,hp=CONFIG.TREE_HP){ // Use CONFIG value for HP
+  const ent=document.createElement('a-entity');
+  ent.setAttribute('position',`${x} 0 ${z}`);
+  ent.classList.add('tree');
+  ent.setAttribute('static-body',''); // Make it static for physics
+
+  const trunk=document.createElement('a-cylinder');
+  trunk.setAttribute('height','2');
+  trunk.setAttribute('radius','0.25');
+  trunk.setAttribute('color','#8B5A2B');
+  trunk.setAttribute('position','0 1 0');
+  trunk.setAttribute('material','src:#bark; roughness:1');
+
   const crown=document.createElement('a-entity');
   const colors=['#0b6b2e','#0f7f39','#0a5f25'];
-  for(let i=0;i<6;i++){ const s=document.createElement('a-sphere'); s.setAttribute('radius',0.8+Math.random()*0.45); s.setAttribute('color',colors[i%colors.length]); s.setAttribute('material','src:#leaf; roughness:1'); s.setAttribute('position',`${(Math.random()-.5)*1.0} ${1.6+Math.random()*0.7} ${(Math.random()-.5)*1.0}`); crown.appendChild(s); }
-  ent.appendChild(trunk); ent.appendChild(crown);
-  ent.__data={hp};
+  for(let i=0;i<6;i++){
+    const s=document.createElement('a-sphere');
+    s.setAttribute('radius',0.8+Math.random()*0.45);
+    s.setAttribute('color',colors[i%colors.length]);
+    s.setAttribute('material','src:#leaf; roughness:1');
+    s.setAttribute('position',`${(Math.random()-.5)*1.0} ${1.6+Math.random()*0.7} ${(Math.random()-.5)*1.0}`);
+    crown.appendChild(s);
+  }
+
+  ent.appendChild(trunk);
+  ent.appendChild(crown);
+  ent.__data={hp}; // Store HP data
+  ent.__type = 'tree';
   document.querySelector('#trees').appendChild(ent);
-  activeResources.add(ent); // Add to active resources
-  // Schedule respawn for trees (longer delay)
+  activeResources.add(ent); // Add to active resources set
+
+  // Schedule respawn for trees with a longer delay (CONFIG.RESPAWN_DELAY_LARGE)
   scheduleRespawn('tree', {x:parseFloat(x), z:parseFloat(z)}, CONFIG.RESPAWN_DELAY_LARGE);
+  return ent;
 }
+// --- End Tree spawning function ---
 
 function spawnBush(x,z){
   const e=document.createElement('a-entity'); e.setAttribute('position',`${x} 0 ${z}`); e.setAttribute('static-body','');
+  e.classList.add('bush');
   for(let i=0;i<6;i++){ const s=document.createElement('a-sphere'); s.setAttribute('radius',0.35+Math.random()*0.25); s.setAttribute('color',i%2?'#126b34':'#0f7f39'); s.setAttribute('material','src:#leaf; roughness:1'); s.setAttribute('position',`${(Math.random()-.5)*0.9} ${0.35+Math.random()*0.2} ${(Math.random()-.5)*0.9}`); e.appendChild(s); }
+  e.__type = 'bush';
+  e.__data = { hp: CONFIG.BUSH_HP };
   document.querySelector('#bushes').appendChild(e);
   activeResources.add(e);
-  // Schedule respawn for bushes (medium delay)
-  scheduleRespawn('bush', {x:parseFloat(x), z:parseFloat(z)}, CONFIG.RESPAWN_DELAY_MEDIUM);
+  // Schedule respawn for bushes (large delay)
+  scheduleRespawn('bush', {x:parseFloat(x), z:parseFloat(z)}, CONFIG.RESPAWN_DELAY_LARGE);
+  return e;
 }
 
 function spawnBoulder(x,z){
   const e=document.createElement('a-entity'); e.setAttribute('position',`${x} 0 ${z}`); e.setAttribute('data-boulder',''); e.setAttribute('static-body','');
+  e.classList.add('boulder');
   const s=document.createElement('a-sphere'); s.setAttribute('radius',0.65+Math.random()*0.3); s.setAttribute('color','#7a7a7a'); s.setAttribute('position','0 0.65 0');
   e.appendChild(s); e.__data={hp:CONFIG.MINING_ROCK_HP};
+  e.__type = 'boulder';
   document.querySelector('#boulders').appendChild(e);
   activeResources.add(e);
-  // Schedule respawn for boulders (medium delay)
-  scheduleRespawn('boulder', {x:parseFloat(x), z:parseFloat(z)}, CONFIG.RESPAWN_DELAY_MEDIUM);
+  // Schedule respawn for boulders (large delay)
+  scheduleRespawn('boulder', {x:parseFloat(x), z:parseFloat(z)}, CONFIG.RESPAWN_DELAY_LARGE);
+  return e;
 }
+
 ringMountains();
 // Call seedBasics which now uses spawnResource
-seedBasics();
 
 // ========== COLLECTIBLES ==========
-// spawnCollectible function remains mostly the same, but now spawnResource will call it and manage respawns.
 function spawnCollectible(type,pos){
   const itemData = { // Item type, associated icon ID, and scale
     stick: {icon:'icon-stick', scale: 0.2}, rock: {icon:'icon-rock', scale: 0.2}, mushroom: {icon:'icon-mushroom', scale: 0.2},
     potion: {icon:'icon-potion', scale: 0.2}, water: {icon:'icon-water', scale: 0.2}, 'wood-staff': {icon:'icon-wood-staff', scale: 0.4},
-    'stone-axe': {icon:'icon-stone-axe', scale: 0.3}, planks: {icon:'icon-planks', scale: 0.2}, house: {icon:'icon-house', scale: 0.5},
-    ruby: {icon:'icon-ruby', scale: 0.25}, 'ruby-necklace': {icon:'icon-ruby-necklace', scale: 0.3}
+    'stone-axe': {icon:'icon-stone-axe', scale: 0.3}, 'stone-pickaxe': {icon:'icon-stone-pickaxe', scale: 0.3}, 'stone-sword': {icon:'icon-stone-sword', scale: 0.3},
+    planks: {icon:'icon-planks', scale: 0.2}, house: {icon:'icon-house', scale: 0.5},
+    ruby: {icon:'icon-ruby', scale: 0.25}, 'ruby-necklace': {icon:'icon-ruby-necklace', scale:0.3}, fireball: {icon:'icon-fireball', scale:0.22}
   };
   const halfHeight = (itemData[type]?.scale || 0.2) / 2;
   const groundY = getGroundYAt(pos.x, pos.z);
   const spawnY = groundY + halfHeight + 0.002;
 
-  const e=document.createElement('a-entity'); e.setAttribute('position',`${pos.x} ${spawnY} ${pos.z}`); e.__type=type;
+  const e=document.createElement('a-entity'); e.setAttribute('position',`${pos.x} ${spawnY} ${pos.z}`); e.__type=type; // Store type for respawn/pickup logic
 
   if(type === 'house'){ // Special case for building
     e.setAttribute('geometry', {primitive: 'box', width: 4, height: 3, depth: 4});
@@ -490,6 +558,18 @@ function spawnCollectible(type,pos){
     e.innerHTML=`<a-cylinder color="#3bb4ff" height="0.8" radius="0.2" position="0 ${halfHeight} 0"></a-cylinder>`;
   } else if(type==='stone-axe') {
     e.innerHTML=`<a-box color="#888" depth="0.2" height="0.6" width="0.15" position="0 ${halfHeight*1.5} 0"></a-box>`;
+  } else if(type==='stone-pickaxe') {
+     // Simple pickaxe visual
+    e.innerHTML=`<a-entity position="0 ${halfHeight} 0">
+                    <a-box depth="0.1" height="0.5" width="0.2" color="#aaa" position="0 0.25 0"></a-box>
+                    <a-box depth="0.15" height="0.2" width="0.2" color="#888" position="0 0.5 0.05"></a-box>
+                 </a-entity>`;
+  } else if(type==='stone-sword') {
+    // Simple sword visual
+    e.innerHTML=`<a-entity position="0 ${halfHeight} 0">
+                    <a-box depth="0.05" height="0.7" width="0.1" color="#ccc" position="0 0.35 0"></a-box>
+                    <a-box depth="0.05" height="0.4" width="0.15" color="#888" position="0 0.175 0.1"></a-box>
+                 </a-entity>`;
   } else if(type==='wood-staff') {
     e.innerHTML=`<a-cylinder color="#6c4f2a" height="1.2" radius="0.05" position="0 ${halfHeight} 0"></a-cylinder>`;
   } else if(type==='planks') {
@@ -498,19 +578,26 @@ function spawnCollectible(type,pos){
     e.innerHTML = `<a-sphere color="#e8006f" radius="${halfHeight}" position="0 ${halfHeight} 0"></a-sphere>`;
   } else if (type === 'ruby-necklace') {
     e.innerHTML = `<a-entity geometry="primitive:torus; radius:0.15; radius-tubular-start:0.05; radius-tubular-end:0.05;" material="color: #e8006f; shader: flat; emissive: #e8006f;" rotation="90 0 0"></a-entity>`;
+  } else if (type === 'fireball') {
+    e.innerHTML = `<a-sphere color="#ff7f1f" radius="${halfHeight}" position="0 ${halfHeight} 0"></a-sphere>`;
   }
   e.setAttribute('dynamic-body',`mass:0.2;shape:${type=='stick'||type=='planks'||type=='house'?'box':type=='mushroom'?'box':'sphere'};linearDamping:0.9;angularDamping:0.9;allowSleep:true;`);
   document.querySelector('#collectibles').appendChild(e);
   return e;
 }
 
+
 // Initial seeding of resources
 function seedBasics(){
-  for(let i=0;i<7;i++) spawnResource('stick',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
-  for(let i=0;i<5;i++) spawnResource('rock',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
-  for(let i=0;i<4;i++) spawnResource('mushroom',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
+  for(let i=0; i<7; i++) spawnResource('stick',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
+  for(let i=0; i<5; i++) spawnResource('rock',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
+  for(let i=0; i<4; i++) spawnResource('mushroom',{x:(Math.random()*12-6),z:(Math.random()*12-6)});
+  // --- Spawn trees ---
+  for(let i=0; i<3; i++) spawnResource('tree',{x:(Math.random()*40-20),z:(Math.random()*40-20)});
+  // --- Spawn boulders and bushes via spawnResource wrapper ---
+  for(let i=0; i<3; i++) spawnResource('boulder',{x:(Math.random()*40-20),z:(Math.random()*40-20)});
+  for(let i=0; i<5; i++) spawnResource('bush',{x:(Math.random()*40-20),z:(Math.random()*40-20)});
 }
-
 
 // ========== ENEMIES ==========
 const enemiesRoot=document.querySelector('#enemies');
@@ -588,10 +675,9 @@ function onEnemyDeath(e, source){
 }
 
 // ================== ENEMY AI ==================
-// Aggro only if provoked, not proximity
 function updateEnemies(dt){
   const playerPos = document.querySelector('#player').object3D.position;
-  activeEnemies = activeEnemies.filter(e => e.parentNode);
+  activeEnemies = activeEnemies.filter(e => e.parentNode); // Clean up dead enemies from the list
   for (const e of activeEnemies) {
     if (!e.__data.alive) continue;
     const enemyPos = e.object3D.position;
@@ -599,8 +685,7 @@ function updateEnemies(dt){
 
     // Only chase if provoked (aggro set by attack)
     if (e.__data.aggro && distToPlayer < CONFIG.ENEMY_AGGRO_RANGE) {
-      // Already provoked, keep chasing if in range
-      e.__data.aggro = true;
+      e.__data.aggro = true; // Keep aggro if in range
     }
 
     if (e.__data.aggro) {
@@ -625,7 +710,7 @@ function updateEnemies(dt){
           }
         }
       }
-    } else {
+    } else { // Wandering behavior
       const wanderDist = Math.hypot(enemyPos.x - e.__data.wanderTarget.x, enemyPos.z - e.__data.wanderTarget.z);
       if (wanderDist < 1.0) {
         e.__data.wanderTarget.x = enemyPos.x + (Math.random()-0.5)*5;
@@ -641,7 +726,7 @@ function updateEnemies(dt){
     e.setAttribute('position', `${enemyPos.x} ${enemyPos.y} ${enemyPos.z}`);
     if (e.__data.hpText) {
       e.__data.hpText.setAttribute('value','HP: '+Math.max(0,Math.round(e.__data.hp)));
-      e.__data.hpText.setAttribute('position','0 1.2 0');
+      e.__data.hpText.setAttribute('position','0 1.2 0'); // Keep HP text above enemy
     }
   }
 }
@@ -651,6 +736,14 @@ const invGrid = document.getElementById('inv-grid');
 const craftingList = document.getElementById('craft-list');
 
 function updateRubyBar(){ document.getElementById('rubyCount').textContent = state.inventory.ruby || 0; }
+
+function setHotbarIconsOnLoad(){
+  const hbStoneAxe = document.querySelector('.hotbar-item[data-item="stone-axe"] img');
+  const hbStaff = document.querySelector('.hotbar-item[data-item="wood-staff"] img');
+  if(hbStoneAxe) hbStoneAxe.src = getItemIconUrl('stone-axe');
+  if(hbStaff) hbStaff.src = getItemIconUrl('wood-staff');
+}
+setHotbarIconsOnLoad();
 
 // Function to get item icon URL from assets
 function getItemIconUrl(itemType) {
@@ -663,13 +756,15 @@ function renderInventorySlots() {
   invGrid.innerHTML = ''; // Clear existing slots
   const maxSlots = 36; // Example: 6x6 grid
 
+  // Collect all items from inventory that have a count > 0
+  const inventoryItems = Object.entries(state.inventory).filter(([type, count]) => count > 0);
+
   for (let i = 0; i < maxSlots; i++) {
     const slot = document.createElement('div');
     slot.classList.add('slot');
     slot.dataset.index = i; // Store index for potential future use
 
     // Check if an item should be displayed in this slot
-    const inventoryItems = Object.entries(state.inventory).filter(([type, count]) => count > 0);
     if (i < inventoryItems.length) {
       const [itemType, quantity] = inventoryItems[i];
       slot.innerHTML = `
@@ -691,10 +786,11 @@ function logInfo(message) {
   const messageElement = document.createElement('div');
   messageElement.textContent = message;
   infolog.appendChild(messageElement);
+  // Keep the log from getting too long
   if (infolog.children.length > 18) {
     infolog.removeChild(infolog.children[0]);
   }
-  infolog.scrollTop = infolog.scrollHeight;
+  infolog.scrollTop = infolog.scrollHeight; // Auto-scroll to bottom
 }
 
 // XP & Level up
@@ -706,7 +802,7 @@ function checkLevelUp(){
     state.hpMax += 8;
     state.staminaMax += 5;
     state.manaMax += 5;
-    state.hp = state.hpMax;
+    state.hp = state.hpMax; // Full heal on level up
     state.mana = state.manaMax;
     logInfo(`Leveled up! Now level ${state.level}.`);
   }
@@ -726,14 +822,18 @@ function refreshUI(){
   document.getElementById('xpMax').textContent=state.xpMax;
   document.getElementById('level').textContent=state.level;
   document.getElementById('quest').textContent=state.quest;
-  document.getElementById('equipped').textContent=state.equipped? (state.equipped==='wood-staff'?'Wood Staff':'Stone Axe') : 'None';
+  document.getElementById('equipped').textContent=state.equipped? (state.equipped==='wood-staff'?'Wood Staff': state.equipped==='stone-pickaxe'?'Stone Pickaxe': state.equipped==='stone-sword'?'Stone Sword':'Stone Axe') : 'None';
   document.getElementById('xp_small').textContent = state.xp;
   updateRubyBar();
   updateEnemyCount();
   document.getElementById('status').textContent = state.isDead ? 'Dead' : (player.__grounded ? (sprinting ? 'Sprinting' : 'Idle') : 'In Air');
   updateInventoryDisplay(); // Ensure inventory is shown correctly
-}
 
+  // Update hotbar visuals based on equipped item
+  document.querySelectorAll('.hotbar-item').forEach(hb=>{
+    hb.classList.toggle('active', hb.dataset.item === state.equipped);
+  });
+}
 
 // ========== START BUTTON ==========
 let gameStarted = false;
@@ -847,7 +947,8 @@ document.addEventListener('keydown',e=>{
       logInfo("Can't start climbing while in the air.");
     } else {
       const raycaster = rayFromCam(2.0);
-      const staticObjs = [...document.querySelectorAll('[static-body]')].filter(el => !el.classList.contains('building')); // Avoid climbing buildings
+      // Exclude buildings from climbing to prevent issues
+      const staticObjs = [...document.querySelectorAll('[static-body]')].filter(el => !el.classList.contains('building') && !el.classList.contains('house-blueprint'));
       const hits = raycaster.intersectObjects(staticObjs.map(el => el.object3D), true);
       if(hits.length > 0){
         const firstHit = hits[0];
@@ -865,6 +966,16 @@ document.addEventListener('keydown',e=>{
       showBuildingPreview('house');
     } else {
       hideBuildingPreview();
+    }
+  }
+
+  // Number keys for hotbar equip
+  if(['1','2','3','4','5','6','7','8','9','0'].includes(e.key)){
+    const idx = e.key === '0' ? 9 : parseInt(e.key)-1;
+    const hotbarItems = Array.from(document.querySelectorAll('.hotbar-item'));
+    if(hotbarItems[idx]){
+      const item = hotbarItems[idx].dataset.item;
+      equipItem(item);
     }
   }
 });
@@ -894,8 +1005,24 @@ document.addEventListener('mousedown', (e) => {
       }
       return;
     }
-    meleeAttack();
+    // Check equipped item for mining/attacking
+    if (state.equipped === 'stone-pickaxe') {
+      mineBoulder();
+    } else if (state.equipped === 'stone-sword') {
+      // First try to mine a bush in front; if none, perform melee attack
+      if (!mineBush()) meleeAttack();
+    } else if (state.equipped === 'stone-axe') {
+      meleeAttack();
+    } else {
+      // Unarmed or other tools just swing
+      meleeAttack();
+    }
   }
+});
+
+// Prevent default context menu so right-click can be used for fireballs
+document.addEventListener('contextmenu', e => {
+  if(gameStarted) e.preventDefault();
 });
 
 document.addEventListener('mousedown',e=>{
@@ -904,6 +1031,10 @@ document.addEventListener('mousedown',e=>{
   if(e.button === 2){ // Right click
     if(state.equipped === 'wood-staff' && state.knownSpells.has('fireball') && (state.inventory.fireball||0)>0 && state.mana >= CONFIG.FIREBALL_MANA_COST){
       shootFireball();
+    } else {
+      if(state.equipped === 'wood-staff'){
+        showPrompt("You need to learn Fireball and have crafted fireballs / have mana.");
+      }
     }
   }
 });
@@ -918,7 +1049,7 @@ function meleeAttack(){
   let anyHit = false;
   for(const e of enemiesRoot.children){
     if(!e.__data || !e.__data.alive) continue;
-    const ep = e.object3D.position.clone();
+    const ep = e.object3D.position;
     const toEnemy = ep.clone().sub(camPos);
     const dist = toEnemy.length();
     if(dist <= CONFIG.PLAYER_MELEE_RANGE){
@@ -928,7 +1059,9 @@ function meleeAttack(){
         // damage calculation
         let dmg = CONFIG.PLAYER_MELEE_BASE_DAMAGE;
         if(state.equipped === 'stone-axe') dmg += 18;
+        else if(state.equipped === 'stone-sword') dmg = 20; // Stone Sword damage
         else if(state.equipped === 'wood-staff') dmg += 6;
+
         e.__data.hp -= dmg;
         e.__data.aggro = true; // AGGRO ON HIT!
         e.__data.hpText.setAttribute('value','HP: '+Math.max(0,Math.round(e.__data.hp)));
@@ -950,36 +1083,119 @@ function meleeAttack(){
   refreshUI();
 }
 
+// Mine Boulder function
+function mineBoulder() {
+  if (playerAttackCooldown > 0) return;
+  playerAttackCooldown = CONFIG.PLAYER_MELEE_COOLDOWN; // Use same cooldown as melee
+
+  const raycaster = rayFromCam(2.5); // Mining range
+  const hits = raycaster.intersectObjects([...document.querySelectorAll('.boulder')].map(el => el.object3D), true);
+
+  if (hits.length > 0) {
+    const boulder = hits[0].object.el;
+    if (boulder && boulder.__data) {
+      boulder.__data.hp -= CONFIG.MINING_ROCK_DAMAGE; // Damage the boulder
+      logInfo(`Mining boulder for ${CONFIG.MINING_ROCK_DAMAGE} damage.`);
+
+      showFloatingText(`-${CONFIG.MINING_ROCK_DAMAGE}`, boulder.object3D.position, '#e8006f');
+
+      if (boulder.__data.hp <= 0) {
+        logInfo("Boulder depleted!");
+        const pos = boulder.object3D.position;
+        // Drop rocks
+        const rockDropCount = 2 + Math.floor(Math.random() * 3); // Drop 2 to 4 rocks
+        for (let i = 0; i < rockDropCount; i++) {
+          spawnResource('rock', { x: pos.x + (Math.random()-0.5)*0.5, z: pos.z + (Math.random()-0.5)*0.5 });
+        }
+        activeResources.delete(boulder); // Remove from active resources
+        boulder.parentNode && boulder.parentNode.removeChild(boulder); // Remove from scene
+
+        // Clear respawn timer if it exists
+        const timerKey = `boulder-${pos.x.toFixed(2)}x${pos.z.toFixed(2)}`;
+        if (respawnTimers[timerKey]) {
+          clearTimeout(respawnTimers[timerKey]);
+          delete respawnTimers[timerKey];
+        }
+      }
+      refreshUI();
+      return true;
+    }
+  } else {
+    logInfo("Nothing to mine here.");
+  }
+  return false;
+}
+
+// Mine Bush function (mined with sword)
+function mineBush() {
+  if (playerAttackCooldown > 0) return false;
+  playerAttackCooldown = CONFIG.PLAYER_MELEE_COOLDOWN;
+
+  const raycaster = rayFromCam(2.2); // Mining range for bushes
+  const hits = raycaster.intersectObjects([...document.querySelectorAll('.bush')].map(el => el.object3D), true);
+
+  if (hits.length > 0) {
+    const bush = hits[0].object.el;
+    if (bush && bush.__data) {
+      bush.__data.hp -= CONFIG.BUSH_HIT_DAMAGE;
+      logInfo(`Cut bush for ${CONFIG.BUSH_HIT_DAMAGE} damage.`);
+      showFloatingText(`-${CONFIG.BUSH_HIT_DAMAGE}`, bush.object3D.position, '#7ee7ff');
+
+      if (bush.__data.hp <= 0) {
+        logInfo("Bush cleared!");
+        const pos = bush.object3D.position;
+        const stickDropCount = 1 + Math.floor(Math.random() * 3); // 1-3 sticks
+        for (let i = 0; i < stickDropCount; i++) {
+          spawnResource('stick', { x: pos.x + (Math.random()-0.5)*0.4, z: pos.z + (Math.random()-0.5)*0.4 });
+        }
+        activeResources.delete(bush);
+        bush.parentNode && bush.parentNode.removeChild(bush);
+
+        const timerKey = `bush-${pos.x.toFixed(2)}x${pos.z.toFixed(2)}`;
+        if (respawnTimers[timerKey]) {
+          clearTimeout(respawnTimers[timerKey]);
+          delete respawnTimers[timerKey];
+        }
+      }
+      refreshUI();
+      return true;
+    }
+  }
+  return false;
+}
+
+
 // Attack cooldown ticking
 setInterval(()=> { if(playerAttackCooldown>0) playerAttackCooldown = Math.max(0, playerAttackCooldown - 0.05); }, 50);
 
 // ========== GAME LOOP ==========
 function gameLoop(now){
-  const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+  const dt = Math.min(0.05, (now - lastFrameTime) / 1000); // Delta time, capped at 50ms to prevent physics issues
   lastFrameTime = now;
 
   if(gameStarted && !state.isDead){
-    if(player.__climbing && player.__climbing.active){
+    if(player.__climbing && player.__climbing.active){ // Climbing logic
       const pos = player.object3D.position;
       const tp = player.__climbing.targetPos;
       const targetY = player.__climbing.targetTopY + CONFIG.PLAYER_GROUND_Y;
       const dx = tp.x - pos.x;
       const dz = tp.z - pos.z;
       const distXZ = Math.hypot(dx, dz);
-      if(distXZ > 0.001){
+      if(distXZ > 0.001){ // Move horizontally
         const moveXZ = Math.min(distXZ, CONFIG.CLIMB_VELOCITY * dt);
         pos.x += (dx / distXZ) * moveXZ;
         pos.z += (dz / distXZ) * moveXZ;
       }
-      if(pos.y < targetY){
+      if(pos.y < targetY){ // Move vertically
         pos.y = Math.min(pos.y + CONFIG.CLIMB_VELOCITY * dt, targetY);
       }
       player.object3D.position.set(pos.x, pos.y, pos.z);
       player.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+      // Check if arrived
       const arrivedVertically = pos.y >= targetY - 0.001;
       const arrivedHorizontally = distXZ <= 0.06;
       if(arrivedVertically && arrivedHorizontally){
-        player.object3D.position.set(tp.x, targetY, tp.z);
+        player.object3D.position.set(tp.x, targetY, tp.z); // Snap to final position
         player.setAttribute('position', `${tp.x} ${targetY} ${tp.z}`);
         player.__climbing.active = false;
         player.__grounded = true;
@@ -990,143 +1206,163 @@ function gameLoop(now){
       updateEnemies(dt);
       updateBuildingPreview();
       requestAnimationFrame(gameLoop);
-      return;
+      return; // Skip normal movement while climbing
     }
 
+    // Normal player movement
     const yaw = cameraEl.object3D.rotation.y;
-    const forward = new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw));
-    const right   = new THREE.Vector3(-forward.z,0,forward.x);
+    const forward = new THREE.Vector3(-Math.sin(yaw),0,-Math.cos(yaw)); // Forward direction based on camera
+    const right   = new THREE.Vector3(-forward.z,0,forward.x);       // Right direction
     let dir = new THREE.Vector3();
     if(moveDir.f) dir.add(forward);
     if(moveDir.b) dir.sub(forward);
     if(moveDir.l) dir.sub(right);
     if(moveDir.r) dir.add(right);
-    if(dir.lengthSq()>0){ dir.normalize().multiplyScalar(player.__speed*dt); player.object3D.position.add(dir); }
 
+    if(dir.lengthSq()>0){ // If there's movement input
+      dir.normalize().multiplyScalar(player.__speed*dt);
+      player.object3D.position.add(dir);
+    }
+
+    // Gravity and Ground check
     player.__velY += CONFIG.GRAVITY * dt;
     player.object3D.position.y += player.__velY * dt;
     if(player.object3D.position.y <= CONFIG.PLAYER_GROUND_Y){
       player.object3D.position.y = CONFIG.PLAYER_GROUND_Y;
       player.__velY = 0;
       player.__grounded = true;
-    } else { player.__grounded = false; }
+    } else {
+      player.__grounded = false;
+    }
 
-    manageStamina(dt);
-    updateEnemies(dt);
-    updateBuildingPreview();
+    manageStamina(dt); // Stamina regeneration/drain
+    updateEnemies(dt); // Update enemy AI
+    updateBuildingPreview(); // Update building preview position
   }
 
-  // general ticks (cooldowns, regen)
+  // General ticks (cooldowns, regen)
   if(gameStarted && !state.isDead){
-    // mana regen small
+    // Small mana regen tick
     state.mana = Math.min(state.manaMax, state.mana + 8 * dt);
-    refreshUI();
+    refreshUI(); // Refresh UI periodically
   }
-  requestAnimationFrame(gameLoop);
+  requestAnimationFrame(gameLoop); // Request next frame
 }
 
 // ========== FIREBALL SPELL LOGIC ==========
 function shootFireball(){
-  state.inventory.fireball -= 1;
-  state.mana -= CONFIG.FIREBALL_MANA_COST;
-  refreshUI();
+  state.inventory.fireball -= 1; // Consume one fireball
+  state.mana -= CONFIG.FIREBALL_MANA_COST; // Consume mana
+  refreshUI(); // Update UI immediately
+
   const cam = cameraEl.object3D;
-  const pos = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
-  const dir = new THREE.Vector3(0,0,-1).applyQuaternion(cam.quaternion).normalize();
-  const fb = document.createElement('a-sphere');
+  const pos = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld); // Start position at camera
+  const dir = new THREE.Vector3(0,0,-1).applyQuaternion(cam.quaternion).normalize(); // Direction based on camera
+
+  const fb = document.createElement('a-sphere'); // Create the fireball entity
   fb.setAttribute('radius','0.23');
-  fb.setAttribute('color','#ff7f1f');
+  fb.setAttribute('color','#ff7f1f'); // Fiery color
   fb.setAttribute('position',`${pos.x} ${pos.y} ${pos.z}`);
   fb.setAttribute('shadow','cast:true');
   document.querySelector('a-scene').appendChild(fb);
-  let t=0;
-  let hit = false;
+
+  let t = 0; // Timer for animation duration
+  let hit = false; // Flag to check if fireball hit something
+
   function anim(){
-    if(t>1.5 || hit){ fb.parentNode&&fb.parentNode.removeChild(fb); return; }
-    t+=0.05;
-    pos.add(dir.clone().multiplyScalar(0.48));
+    if(t > 1.5 || hit){ // Remove fireball after duration or on hit
+      fb.parentNode&&fb.parentNode.removeChild(fb);
+      return;
+    }
+    t += 0.05; // Increment timer
+    pos.add(dir.clone().multiplyScalar(0.48)); // Move fireball
     fb.setAttribute('position',`${pos.x} ${pos.y} ${pos.z}`);
+
+    // Collision detection with enemies
     for(const e of enemiesRoot.children){
-      if(!e.__data||!e.__data.alive) continue;
+      if(!e.__data || !e.__data.alive) continue; // Skip dead or invalid enemies
       const ep = e.object3D.position;
-      if(Math.hypot(ep.x-pos.x,ep.y-pos.y,ep.z-pos.z)<1.1){
+      if(Math.hypot(ep.x - pos.x, ep.y - pos.y, ep.z - pos.z) < 1.1){ // Check distance for collision
         hit = true;
-        e.__data.hp -= 36;
-        e.__data.aggro = true; // AGGRO ON HIT!
+        e.__data.hp -= 36; // Deal damage
+        e.__data.aggro = true; // Make enemy aggro
         e.__data.hpText.setAttribute('value','HP: '+Math.max(0,Math.round(e.__data.hp)));
-        if(Math.random()<0.45){
-          e.__data.burning = 5;
-          e.setAttribute('color','#ffb133');
+        if(Math.random() < 0.45){ // Chance to set on fire
+          e.__data.burning = 5; // Set burning duration
+          e.setAttribute('color','#ffb133'); // Change color to indicate fire
         }
-        if(e.__data.hp<=0 && e.__data.alive){
-          onEnemyDeath(e, 'fireball');
+        if(e.__data.hp <= 0 && e.__data.alive){
+          onEnemyDeath(e, 'fireball'); // Handle enemy death
           logInfo("Enemy defeated!");
         }
-        break;
+        break; // Fireball only hits one enemy
       }
     }
-    setTimeout(anim, 50);
+    setTimeout(anim, 50); // Continue animation
   }
-  anim();
+  anim(); // Start the animation loop
 }
 
 // ========== BURNING DAMAGE ==========
-setInterval(()=>{
+setInterval(()=>{ // Periodic effect for burning enemies
   for(const e of enemiesRoot.children){
-    if(e.__data && e.__data.burning>0){
-      e.__data.hp -= 2;
-      e.__data.burning -= 1;
+    if(e.__data && e.__data.burning > 0){
+      e.__data.hp -= 2; // Deal burning damage
+      e.__data.burning -= 1; // Decrease burning duration
       e.__data.hpText.setAttribute('value','HP: '+Math.max(0,Math.round(e.__data.hp)));
-      if(e.__data.burning<=0) e.setAttribute('color','#ff5c5c');
-      if(e.__data.hp<=0 && e.__data.alive){
-        onEnemyDeath(e, 'burn');
+      if(e.__data.burning <= 0) e.setAttribute('color','#ff5c5c'); // Revert color if burn ends
+      if(e.__data.hp <= 0 && e.__data.alive){
+        onEnemyDeath(e, 'burn'); // Handle death from burn damage
       }
     }
   }
-},1000);
+}, 1000); // Check every second
 
 // ========== PLAYER DEATH & RESPAWN ==========
 const deathOverlay = document.getElementById('deathOverlay');
 const respawnCountdownEl = document.getElementById('respawnCountdown');
 
 function handlePlayerDeath(){
-  if(state.isDead) return;
+  if(state.isDead) return; // Prevent multiple deaths
   state.isDead = true;
   logInfo("You have been defeated!");
-  // Show death overlay and disable inputs
-  deathOverlay.style.display = 'flex';
-  let countdown = 4;
-  respawnCountdownEl.textContent = `Respawning in ${countdown}...`;
-  // optionally drop some items on death
-  const droppedRubies = Math.floor((state.inventory.ruby || 0) * 0.3);
-  if(droppedRubies>0){
+  deathOverlay.style.display = 'flex'; // Show death screen
+
+  // Optionally drop some items on death
+  const droppedRubies = Math.floor((state.inventory.ruby || 0) * 0.3); // Drop 30% of rubies
+  if(droppedRubies > 0){
     state.inventory.ruby -= droppedRubies;
     const p = player.object3D.position;
-    // spawn some rubies around player
-    for(let i=0;i<droppedRubies;i++){
+    // Spawn the dropped rubies around the player
+    for(let i = 0; i < droppedRubies; i++){
+      // Use spawnResource to ensure they are tracked and potentially respawnable
       spawnResource('ruby',{x: p.x + (Math.random()-0.5)*1.5, z: p.z + (Math.random()-0.5)*1.5});
     }
   }
-  refreshUI();
+  refreshUI(); // Update UI to reflect lost rubies
+
+  // Start respawn countdown
+  let countdown = 4;
+  respawnCountdownEl.textContent = `Respawning in ${countdown}...`;
   const countdownInterval = setInterval(()=>{
     countdown--;
-    if(countdown>0) respawnCountdownEl.textContent = `Respawning in ${countdown}...`;
+    if(countdown > 0) respawnCountdownEl.textContent = `Respawning in ${countdown}...`;
     else {
-      clearInterval(countdownInterval);
-      respawnPlayer();
+      clearInterval(countdownInterval); // Stop the interval
+      respawnPlayer(); // Respawn the player
     }
   }, 1000);
 }
 
 function respawnPlayer(){
-  // reset player position and some stats
+  // Reset player position and stats
   player.object3D.position.set(0, CONFIG.PLAYER_GROUND_Y, 2);
   player.setAttribute('position', `0 ${CONFIG.PLAYER_GROUND_Y} 2`);
   state.isDead = false;
-  state.hp = Math.max(1, Math.round(state.hpMax * 0.6));
-  state.mana = Math.min(state.manaMax, Math.round(state.manaMax * 0.5));
-  state.stamina = Math.min(state.staminaMax, Math.round(state.staminaMax * 0.5));
-  deathOverlay.style.display = 'none';
+  state.hp = Math.max(1, Math.round(state.hpMax * 0.6)); // Respawn with 60% health
+  state.mana = Math.min(state.manaMax, Math.round(state.manaMax * 0.5)); // Respawn with 50% mana
+  state.stamina = Math.min(state.staminaMax, Math.round(state.staminaMax * 0.5)); // Respawn with 50% stamina
+  deathOverlay.style.display = 'none'; // Hide death screen
   logInfo("You have respawned.");
   refreshUI();
 }
@@ -1137,7 +1373,9 @@ function interactTalk(){
   const p = player.object3D.position;
   const elder = document.querySelector('#npc-group').object3D.position;
   const villager = document.querySelector('#villager-far').object3D.position;
-  const shopHouse = document.querySelector('#shop-house').object3D.position;
+  const shopHouse = document.querySelector('#shop-house').object3D.position; // Position of the shop house entity
+
+  // Check distance to Elder
   if(Math.hypot(elder.x-p.x,elder.z-p.z)<2.2){
     if(state.quest==='Talk to the Forest Elder'){
       state.quest='Collect 5 sticks for the Elder';
@@ -1148,7 +1386,7 @@ function interactTalk(){
         if(!state.knownSpells.has('fireball')){
           state.knownSpells.add('fireball');
           state.spells.push({id:'fireball',name:'Fireball',charges:2,max:2,dmg:36,cost:CONFIG.FIREBALL_MANA_COST});
-          state.inventory.fireball += 2;
+          state.inventory.fireball += 2; // Give some fireballs
           logInfo("Elder: 'Thank you! Here is a token of my gratitude and knowledge.'");
         } else {
           logInfo("Elder: 'You have already brought the sticks. Well done.'");
@@ -1159,129 +1397,165 @@ function interactTalk(){
     }
     refreshUI(); return true;
   }
+  // Check distance to Villager
   if(Math.hypot(villager.x-p.x, villager.z-p.z)<2.2){
     logInfo('Villager: "Stay safe out there!"'); return true;
   }
-  if(Math.abs(p.x-shopHouse.x)<2 && Math.abs(p.z-shopHouse.z)<2){ interactShop(); return true; }
+  // Check distance to Shop House
+  if(Math.abs(p.x-shopHouse.x)<2 && Math.abs(p.z-shopHouse.z)<2){
+    interactShop(); return true; // Call shop interaction function
+  }
   logInfo('No one to talk to'); return false;
 }
+
 function interactPickup(){
   if(state.isDead) return false;
   const p=player.object3D.position;
   let nearest=null, nd=9e9;
-  // Iterate through active resources to find the closest pickup
+
+  // Check active resources (items that should respawn)
   activeResources.forEach(res => {
     if (!res || !res.parentNode) return; // Skip if resource is invalid or removed
-    const cp=res.object3D.position; const d=Math.hypot(cp.x-p.x, cp.z-p.z);
-    if(d<1.6 && d<nd){ nd=d; nearest=res; }
+    const cp=res.object3D.position;
+    const d=Math.hypot(cp.x-p.x, cp.z-p.z);
+    if(d<1.6 && d<nd){ // Check pickup range
+      nd=d;
+      nearest=res;
+    }
   });
 
   if(nearest){
-    const t=nearest.__type;
+    const t=nearest.__type; // Get the type of the resource
+    const pos = { x: nearest.object3D.position.x, z: nearest.object3D.position.z }; // Capture current position for timer key
+
+    // Logic for different item types
     if(t === 'ruby') {
       state.inventory.ruby = (state.inventory.ruby||0)+1;
-      // Remove from active resources and trigger respawn
-      activeResources.delete(nearest);
-      nearest.parentNode&&nearest.parentNode.removeChild(nearest);
-      refreshUI();
       logInfo('Picked up a ruby! ✨');
-      return true;
+    } else {
+      state.inventory[t]=(state.inventory[t]||0)+1; // Increment count in inventory
+      logInfo(`Picked up a ${t}.`);
     }
-    state.inventory[t]=(state.inventory[t]||0)+1;
-    // Remove from active resources and trigger respawn
+
+    // Remove from active resources and the scene
     activeResources.delete(nearest);
     nearest.parentNode&&nearest.parentNode.removeChild(nearest);
+
+    // Clear the specific respawn timer for this item
+    const timerKey = `${t}-${pos.x.toFixed(2)}x${pos.z.toFixed(2)}`;
+    if (respawnTimers[timerKey]) {
+      clearTimeout(respawnTimers[timerKey]);
+      delete respawnTimers[timerKey]; // Clean up the timer reference
+    }
+
     refreshUI();
-    logInfo(`Picked up a ${t}.`);
-    return true;
+    return true; // Indicate an item was picked up
   }
-  // Check ponds for water
+  // Check ponds for water (pond items don't respawn in this setup)
   for(let i=0; i<document.querySelectorAll('a-circle.clickable').length; i++){
     const pond=document.querySelectorAll('a-circle.clickable')[i];
-    const po=pond.object3D.position; const d=Math.hypot(po.x-p.x, po.z-p.z);
-    if(d<2){
+    const po=pond.object3D.position;
+    const d=Math.hypot(po.x-p.x, po.z-p.z);
+    if(d<2){ // Pickup range for pond
       state.inventory.water=(state.inventory.water||0)+1;
-      // Water is not a collectible entity, so no respawn logic here unless you make it one.
       refreshUI();
       logInfo('Collected some water. 💧');
       return true;
     }
   }
-  return false;
+  return false; // No item picked up
 }
+
 function interactShop(){
   const p = player.object3D.position;
   const shopHouseEntity = document.querySelector('#shop-house');
   if(!shopHouseEntity) { showPrompt('No shop found'); return false; }
   const shopHousePos = shopHouseEntity.object3D.position;
+
+  // Check if player is close enough to the shop
   if(Math.abs(p.x - shopHousePos.x) < 2.2 && Math.abs(p.z - shopHousePos.z) < 2.2){
+    // Construct the shop prompt dynamically
     let msg = 'Shop - Buy with Rubies:<br>';
     shopItems.forEach(item=>{
       msg += `${item.name} (${item.price} rubies) <button onclick="window.buyShopItem('${item.id}')">Buy</button><br>`;
     });
     msg += '<br><button onclick="window.openSellMenu()">Sell Items</button>';
-    showPrompt(msg);
+    showPrompt(msg); // Display the shop interface
     return true;
   }
   showPrompt('No shop nearby');
   return false;
 }
+
+// Shop item buying logic
 window.buyShopItem = function(id){
   const item = shopItems.find(i=>i.id===id);
   if(!item) return;
   if((state.inventory.ruby||0) < item.price){
     showPrompt('Not enough rubies!'); return;
   }
-  state.inventory.ruby -= item.price;
+  state.inventory.ruby -= item.price; // Deduct cost
+  // Grant item effect
   if(id === 'food') {
-    state.food = Math.min(100, state.food + 50);
+    state.food = Math.min(100, state.food + 50); // Increase food
     logInfo('Ate some food. 🍎');
-  }
-  if(id === 'armour') {
-    state.hpMax += 20;
-    state.hp = state.hpMax;
+  } else if(id === 'armour') {
+    state.hpMax += 20; // Increase max HP
+    state.hp = state.hpMax; // Full heal
     logInfo('Equipped better armor! 🛡️');
   }
-  showPrompt('Thanks for your purchase!'); refreshUI();
+  showPrompt('Thanks for your purchase!');
+  refreshUI(); // Update display
 };
+
+// Opens the sell menu in the shop prompt
 window.openSellMenu = function(){
   let msg = 'Sell Items for Rubies:<br>';
+  // List items that can be sold
   Object.keys(state.inventory).forEach(k=>{
-    if(state.inventory[k]>0 && k!=='ruby' && k !== 'fireball'){ // Don't sell fireballs or rubies
+    if(state.inventory[k]>0 && k!=='ruby' && k !== 'fireball'){ // Don't sell rubies or fireballs
       msg += `${k} x${state.inventory[k]} <button onclick="window.sellItem('${k}')">Sell</button><br>`;
     }
   });
-  if(msg==='Sell Items for Rubies:<br>') msg += 'No items to sell!';
-  showPrompt(msg);
+  if(msg==='Sell Items for Rubies:<br>') msg += 'No items to sell!'; // Message if inventory is empty
+  showPrompt(msg); // Update prompt with sell options
 };
+
+// Logic for selling an item
 window.sellItem = function(id){
-  if(!state.inventory[id]||id==='ruby') return;
-  state.inventory[id]--;
-  state.inventory.ruby = (state.inventory.ruby||0)+1;
+  if(!state.inventory[id]||id==='ruby') return; // Cannot sell rubies or non-existent items
+  state.inventory[id]--; // Decrease item count
+  state.inventory.ruby = (state.inventory.ruby||0)+1; // Gain 1 ruby
   showPrompt('Sold '+id+' for 1 ruby');
-  window.openSellMenu();
-  refreshUI();
+  window.openSellMenu(); // Re-open sell menu to update list
+  refreshUI(); // Update UI
 };
+
+// Displays a temporary message in the prompt area
 function showPrompt(html){
   const p = document.getElementById('prompt');
   p.innerHTML = html;
   p.style.display = 'block';
-  setTimeout(()=>{p.style.display='none';}, 2600);
+  // Hide prompt after a delay
+  setTimeout(()=>{ if(p.innerHTML === html) p.style.display='none'; }, 2600); // Only hide if content hasn't changed
 }
+
+// Keybinds for interactions
 document.addEventListener('keydown',e=>{
   if(!gameStarted) return;
   if(state.isDead) return;
-  if(e.key.toLowerCase()==='e') interactPickup();
-  if(e.key.toLowerCase()==='g') interactTalk();
+  if(e.key.toLowerCase()==='e') interactPickup(); // Pickup key
+  if(e.key.toLowerCase()==='g') interactTalk(); // Talk/Interact key
 });
 
 // ========== UPGRADE STATS LOGIC ==========
 function upgradeStat(statName, cost) {
   if (state.xp >= cost) {
-    state.xp -= cost;
+    state.xp -= cost; // Deduct XP cost
+    // Apply stat increase
     if (statName === 'hp') {
       state.hpMax += 10;
-      state.hp = state.hpMax;
+      state.hp = state.hpMax; // Full heal on upgrade
       logInfo("HP increased! ❤️");
     } else if (statName === 'stamina') {
       state.staminaMax += 5;
@@ -1292,11 +1566,12 @@ function upgradeStat(statName, cost) {
       state.mana = state.manaMax;
       logInfo("Mana increased! 🪄");
     }
-    refreshUI();
+    refreshUI(); // Update UI
   } else {
-    showPrompt("Not enough XP to upgrade!");
+    showPrompt("Not enough XP to upgrade!"); // Notify player if XP is insufficient
   }
 }
+// Add event listeners for upgrade buttons
 document.getElementById('up-hp').addEventListener('click', () => upgradeStat('hp', 50));
 document.getElementById('up-stam').addEventListener('click', () => upgradeStat('stamina', 30));
 document.getElementById('up-mana').addEventListener('click', () => upgradeStat('mana', 30));
@@ -1306,21 +1581,58 @@ const backpack = document.getElementById('backpack');
 const moreBtn = document.getElementById('more-btn');
 const closeBpBtn = document.getElementById('close-bp');
 
+// Equip handling
+function equipItem(itemId){
+  // Only allow equipping items that make sense (you could add more rules)
+  if(!itemId) { state.equipped=''; refreshUI(); return; }
+  state.equipped = itemId;
+  // Visual toggle of hotbar
+  document.querySelectorAll('.hotbar-item').forEach(hb=>{
+    hb.classList.toggle('active', hb.dataset.item === itemId);
+  });
+  logInfo(`Equipped: ${itemId}`);
+  refreshUI();
+}
+// Hotbar click listeners
+document.querySelectorAll('.hotbar-item').forEach(hb=>{
+  hb.addEventListener('click', ()=>{
+    const item = hb.dataset.item;
+    equipItem(item);
+  });
+});
+
 // Render crafting recipes based on current inventory
 function renderCraftingRecipes() {
   craftingList.innerHTML = ''; // Clear existing list
   recipes.forEach(recipe => {
+    // If recipe is 'fireball' and player hasn't learned fireball, skip or show disabled
+    if (recipe.id === 'fireball' && !state.knownSpells.has('fireball')) {
+      // Optionally show a locked entry
+      const recipeElement = document.createElement('div');
+      recipeElement.classList.add('craft-row');
+      recipeElement.innerHTML = `
+        <div class="craft-left">
+          <img src="${getItemIconUrl(recipe.id)}" alt="${recipe.name}">
+          <span style="opacity:0.5">${recipe.name} (Learn Fireball to craft)</span>
+        </div>
+        <button disabled style="opacity:.4; cursor:not-allowed">Locked</button>
+      `;
+      craftingList.appendChild(recipeElement);
+      return;
+    }
+
     const recipeElement = document.createElement('div');
     recipeElement.classList.add('craft-row');
 
     let canCraft = true;
-    let materialString = getMaterialCostString(recipe.materials);
+    // Check if enough materials are available
     for (const [material, count] of Object.entries(recipe.materials)) {
       if ((state.inventory[material] || 0) < count) {
         canCraft = false;
         break;
       }
     }
+    const materialString = getMaterialCostString(recipe.materials); // Get formatted material cost string
 
     recipeElement.innerHTML = `
       <div class="craft-left">
@@ -1335,15 +1647,24 @@ function renderCraftingRecipes() {
   });
 }
 
+// Helper to format material cost string
 function getMaterialCostString(materials) {
   return Object.entries(materials).map(([item, count]) => `${item} x${count}`).join(', ');
 }
 
+// Handles crafting an item
 function craftItem(itemId) {
   const recipe = recipes.find(r => r.id === itemId);
   if (!recipe) return;
 
+  // If trying to craft fireball but player hasn't learned the spell, block
+  if (itemId === 'fireball' && !state.knownSpells.has('fireball')) {
+    showPrompt("You haven't learned Fireball yet.");
+    return;
+  }
+
   let canCraft = true;
+  // Verify materials again (important for security if server-side validation were present)
   for (const [material, count] of Object.entries(recipe.materials)) {
     if ((state.inventory[material] || 0) < count) {
       canCraft = false;
@@ -1352,18 +1673,20 @@ function craftItem(itemId) {
   }
 
   if (canCraft) {
+    // Deduct materials
     for (const [material, count] of Object.entries(recipe.materials)) {
       state.inventory[material] -= count;
     }
+    // Add crafted item
     state.inventory[itemId] = (state.inventory[itemId] || 0) + 1;
     logInfo(`Crafted ${recipe.name}!`);
-    refreshUI(); // Refresh UI to update inventory and counts
+    refreshUI(); // Update UI to reflect changes
   } else {
     showPrompt(`Not enough materials to craft ${recipe.name}.`);
   }
 }
 
-
+// Event listeners for backpack buttons
 moreBtn.addEventListener('click', () => {
     backpack.classList.add('open');
     logInfo("Opened backpack.");
@@ -1375,7 +1698,6 @@ closeBpBtn.addEventListener('click', () => {
   logInfo("Closed backpack.");
 });
 
-
 // ========== CRAFTING RECIPES DEFINITION ==========
 const recipes = [
   // --- Original Recipes ---
@@ -1384,9 +1706,13 @@ const recipes = [
   { id: 'stone-axe', name: 'Stone Axe', materials: { stick: 3, rock: 3 } },
   { id: 'potion', name: 'Health Potion', materials: { mushroom: 2, water: 1 } },
   { id: 'house', name: 'House', materials: { planks: 10, rock: 5 } },
-  // --- NEW RECIPE EXAMPLE: Ruby Necklace ---
+  // --- NEW RECIPES ---
+  { id: 'stone-pickaxe', name: 'Stone Pickaxe', materials: { stick: 2, rock: 4 } },
+  { id: 'stone-sword', name: 'Stone Sword', materials: { stick: 3, rock: 5 } },
+  // Fireball consumable (craftable once you learn the spell)
+  { id: 'fireball', name: 'Fireball (Consumable)', materials: { ruby: 1, planks: 1 } },
+  // --- Existing Ruby Necklace ---
   { id: 'ruby-necklace', name: 'Ruby Necklace', materials: { ruby: 2, planks: 1 } },
-  // --- Add more recipes here as needed ---
 ];
 
 // Ensure recipes are rendered when the game starts
@@ -1398,71 +1724,70 @@ let placedBuildings = [];
 
 function showBuildingPreview(buildingType) {
   if (currentBuildingPreview) {
-    currentBuildingPreview.parentNode.removeChild(currentBuildingPreview);
+    currentBuildingPreview.parentNode.removeChild(currentBuildingPreview); // Remove previous preview if it exists
   }
   currentBuildingPreview = document.createElement('a-entity');
   currentBuildingPreview.setAttribute('id', 'build-preview');
   // Use a default box geometry; specific assets can be added later
   currentBuildingPreview.setAttribute('geometry', { primitive: 'box', width: 4, height: 3, depth: 4 });
-  currentBuildingPreview.setAttribute('material', { src: '#houseTex', opacity: 0.4, transparent: true });
+  currentBuildingPreview.setAttribute('material', { src: '#houseTex', opacity: 0.4, transparent: true }); // Semi-transparent material
   currentBuildingPreview.setAttribute('position', '0 100 0'); // Initial off-screen position
-  currentBuildingPreview.style.display = 'block';
+  currentBuildingPreview.style.display = 'block'; // Make it visible
   document.querySelector('a-scene').appendChild(currentBuildingPreview);
 }
 
 function hideBuildingPreview() {
   if (currentBuildingPreview) {
-    currentBuildingPreview.style.display = 'none';
+    currentBuildingPreview.style.display = 'none'; // Hide the preview
   }
 }
 
 function updateBuildingPreview() {
-  if (!buildModeActive || !currentBuildingPreview) return;
-  const ray = rayFromCam(CONFIG.BUILD_MODE_RANGE);
-  const groundY = getGroundYAt(ray.origin.x, ray.origin.z);
+  if (!buildModeActive || !currentBuildingPreview || currentBuildingPreview.style.display === 'none') return;
+  const ray = rayFromCam(CONFIG.BUILD_MODE_RANGE); // Raycast from camera
+  const groundY = getGroundYAt(ray.origin.x, ray.origin.z); // Get ground height at ray intersection
+  // Calculate preview position based on ray and offset
   const previewPos = {
     x: ray.origin.x,
     y: groundY + CONFIG.BUILD_MODE_OFFSET_Y + 1.5, // Adjust Y based on object's height center
     z: ray.origin.z
   };
-  const collision = checkBuildingCollision(previewPos);
-  if (collision) {
-    currentBuildingPreview.setAttribute('material', 'opacity', 0.2); // Indicate invalid placement
-  } else {
-    currentBuildingPreview.setAttribute('material', 'opacity', 0.4); // Indicate valid placement
-  }
-  currentBuildingPreview.setAttribute('position', `${previewPos.x} ${previewPos.y} ${pos.z}`);
+  const collision = checkBuildingCollision(previewPos); // Check for collisions
+  // Update material color based on collision status
+  currentBuildingPreview.setAttribute('material', 'opacity', collision ? 0.2 : 0.4);
+  currentBuildingPreview.setAttribute('position', `${previewPos.x} ${previewPos.y} ${previewPos.z}`); // Update position
 }
 
 function checkBuildingCollision(pos) {
   const buildingSize = { width: 4, height: 3, depth: 4 }; // Assumed size of the house
-  const buffer = 0.2; // Small buffer to avoid precision issues
+  const buffer = 0.2; // Small buffer for collision detection
 
-  // Check if the building would be too low
+  // Check if the building would be too low (player ground level + half height)
   if (pos.y < CONFIG.PLAYER_GROUND_Y + buildingSize.height / 2) return true;
 
   const collisionRaycaster = new THREE.Raycaster();
   const halfSize = new THREE.Vector3(buildingSize.width / 2, buildingSize.height / 2, buildingSize.depth / 2);
 
-  // Check collision points around the base and top center
+  // Define points to check for collision around the building's base and center
   const testPoints = [
-    new THREE.Vector3(pos.x - halfSize.x + buffer, pos.y, pos.z - halfSize.z + buffer),
+    new THREE.Vector3(pos.x - halfSize.x + buffer, pos.y, pos.z - halfSize.z + buffer), // Bottom corners
     new THREE.Vector3(pos.x + halfSize.x - buffer, pos.y, pos.z - halfSize.z + buffer),
     new THREE.Vector3(pos.x - halfSize.x + buffer, pos.y, pos.z + halfSize.z - buffer),
     new THREE.Vector3(pos.x + halfSize.x - buffer, pos.y, pos.z + halfSize.z - buffer),
-    new THREE.Vector3(pos.x, pos.y + halfSize.y - buffer, pos.z) // Check center top
+    new THREE.Vector3(pos.x, pos.y + halfSize.y - buffer, pos.z) // Center top point
   ];
 
   for (const testPoint of testPoints) {
     const origin = new THREE.Vector3(testPoint.x, 20, testPoint.z); // Ray starts high above
-    const direction = new THREE.Vector3(0, -1, 0);
-    collisionRaycaster.set(origin, direction, 0, 30); // Raycast downwards
-    // Consider only static bodies that are not part of the preview itself
+    const direction = new THREE.Vector3(0, -1, 0); // Ray points downwards
+    collisionRaycaster.set(origin, direction, 0, 30); // Set up raycaster
+
+    // Get all static bodies in the scene, excluding the preview itself
     const staticNodes = [...document.querySelectorAll('[static-body]')].map(el => el.object3D).filter(obj => obj && obj.el !== currentBuildingPreview);
     const hits = collisionRaycaster.intersectObjects(staticNodes, true);
 
     if (hits.length > 0) {
-      // If a hit occurs and it's above the test point's intended Y position (with buffer)
+      // If a hit occurs and it's above the test point's intended Y position (with buffer), it's a collision
       if (hits[0].point.y > testPoint.y - buffer) {
         return true; // Collision detected
       }
@@ -1473,13 +1798,16 @@ function checkBuildingCollision(pos) {
 
 function placeBuilding(buildingType) {
   if (!buildModeActive || !currentBuildingPreview || currentBuildingPreview.style.display === 'none') return;
-  const pos = currentBuildingPreview.object3D.position;
+  const pos = currentBuildingPreview.object3D.position; // Get current preview position
+
+  // Check collision before placing
   if (checkBuildingCollision({x: pos.x, y: pos.y, z: pos.z})) {
     showPrompt("Cannot place building here - collision detected!");
     return;
   }
-  // Deduct materials - assuming 'house' is the only building for now
-  if (state.inventory.house > 0) {
+
+  // Deduct materials for building (assuming 'house' is the only building for now)
+  if (state.inventory.house > 0) { // Check if player has blueprints
     state.inventory.house--;
     state.inventory.planks -= 10;
     state.inventory.rock -= 5;
@@ -1488,29 +1816,33 @@ function placeBuilding(buildingType) {
     return;
   }
 
+  // Create the building entity
   const house = document.createElement('a-entity');
   house.setAttribute('geometry', { primitive: 'box', width: 4, height: 3, depth: 4 });
-  house.setAttribute('material', { src: '#houseTex', roughness: 1 });
-  house.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
-  house.setAttribute('static-body', '');
+  house.setAttribute('material', { src: '#houseTex', roughness: 1 }); // Apply house texture
+  house.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`); // Set position
+  house.setAttribute('static-body', ''); // Make it a static physics body
   house.classList.add('building'); // Add class for collision checks
-  document.querySelector('a-scene').appendChild(house);
-  entitiesInScene.add(house); // Track placed entities
+  document.querySelector('a-scene').appendChild(house); // Add to scene
+  placedBuildings.push(house); // Keep track of placed buildings
+  entitiesInScene.add(house); // Add to general scene entity tracking
   logInfo("House built!");
-  refreshUI();
-  hideBuildingPreview();
+
+  refreshUI(); // Update UI
+  hideBuildingPreview(); // Hide preview
   buildModeActive = false; // Exit build mode after placing
 }
 
+// Initialize building preview visibility on load if game started
 document.addEventListener('DOMContentLoaded', () => {
-  if (gameStarted) { // If game already started on load, ensure preview is handled
+  if (gameStarted) {
     showBuildingPreview('house');
     hideBuildingPreview();
   }
 });
 
 // ========== MISC ==========
-// Initial seeding of resources and setup of initial timers
+// Initial seeding of resources when the script loads
 seedBasics();
 // Initial UI setup when the page loads
 refreshUI();
