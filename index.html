@@ -6,7 +6,7 @@
     <title>Foxamer Miracle Gaming</title>
     <link rel="stylesheet" href="styles.css">
     <style>
-        /* Reset and base styles */
+        /* Existing styles */
         * {
             margin: 0;
             padding: 0;
@@ -144,6 +144,99 @@
             .tagline { font-size: 1.1rem; }
             .info-card { padding: 1rem; }
         }
+
+        /* Chat button styles */
+        .chat-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #ffa751;
+            color: #222a4b;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.3s;
+        }
+        .chat-button:hover {
+            background-color: #ffe259;
+            transform: scale(1.1);
+        }
+
+        /* Chat box styles */
+        .chat-box {
+            position: fixed;
+            bottom: 90px;
+            right: 20px;
+            width: 350px;
+            max-height: 400px;
+            background-color: #222a4b;
+            border: 2px solid #ffa751;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            display: none;
+            flex-direction: column;
+        }
+        .chat-box.header {
+            background-color: #ffa751;
+            color: #222a4b;
+            padding: 10px;
+            border-top-left-radius: 10px;
+            border-top-right-radius: 10px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+        }
+        .chat-box.header img {
+            width: 30px;
+            height: 30px;
+            margin-right: 10px;
+            border-radius: 50%;
+        }
+        .chat-box.body {
+            flex: 1;
+            padding: 10px;
+            overflow-y: auto;
+            background-color: #1a233a;
+            border-radius: 0 0 10px 10px;
+        }
+        .chat-box.body div {
+            margin-bottom: 10px;
+        }
+        .chat-box.body div strong {
+            color: #ffe259;
+        }
+        .chat-box.footer {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #444;
+            background-color: #222a4b;
+            border-bottom-left-radius: 10px;
+            border-bottom-right-radius: 10px;
+        }
+        .chat-box.footer input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 20px;
+            margin-right: 10px;
+            background-color: #333;
+            color: #fff;
+        }
+        .chat-box.footer button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 20px;
+            background-color: #ffa751;
+            color: #222a4b;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -174,25 +267,74 @@
     <footer>
         &copy; 2025 Foxamer Inc. | Level Up Your Imagination!
     </footer>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-image: url('one-piece-background.jpg'); /* Add a One Piece-themed background image */
-            background-size: cover;
-            color: white;
-            text-align: center;
-            padding: 50px;
+
+    <!-- Chat button -->
+    <button class="chat-button" onclick="toggleChat()">💬</button>
+
+    <!-- Chat box -->
+    <div class="chat-box" id="chatBox">
+        <div class="header">
+            <img src="https://via.placeholder.com/30" alt="AI Icon">
+            Chat with Foxamer AI
+        </div>
+        <div class="body" id="chatBody">
+            <!-- Chat messages will appear here -->
+        </div>
+        <div class="footer">
+            <input type="text" id="chatInput" placeholder="Type a message...">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        function toggleChat() {
+            const chatBox = document.getElementById('chatBox');
+            if (chatBox.style.display === 'flex') {
+                chatBox.style.display = 'none';
+            } else {
+                chatBox.style.display = 'flex';
+            }
         }
-        h1 {
-            font-size: 3rem;
-            text-shadow: 2px 2px 5px black;
+
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const body = document.getElementById('chatBody');
+            const message = input.value;
+            if (message.trim() !== '') {
+                body.innerHTML += `<div><strong>You:</strong> ${message}</div>`;
+                input.value = '';
+                // Simulate AI response
+                setTimeout(() => {
+                    const aiResponse = getAIResponse(message);
+                    body.innerHTML += `<div><strong>Foxamer AI:</strong> ${aiResponse}</div>`;
+                    body.scrollTop = body.scrollHeight;
+                }, 1000);
+            }
         }
-        p {
-            font-size: 1.5rem;
+
+        function getAIResponse(message) {
+            // More dynamic and intelligent AI response logic
+            const responses = {
+                'hello': 'Hello! How can I assist you today?',
+                'help': 'Sure, I can help with that. What do you need assistance with?',
+                'coding': 'I can help with coding questions. What specific issue are you facing?',
+                'games': 'Foxamer Miracle Gaming is all about sharing and discovering games. What would you like to know?',
+                'default': "I'm here to help with your coding and gaming needs. What can I do for you?"
+            };
+
+            const lowerMessage = message.toLowerCase();
+            if (lowerMessage.includes('hello')) {
+                return responses['hello'];
+            } else if (lowerMessage.includes('help')) {
+                return responses['help'];
+            } else if (lowerMessage.includes('coding')) {
+                return responses['coding'];
+            } else if (lowerMessage.includes('games')) {
+                return responses['games'];
+            } else {
+                return responses['default'];
+            }
         }
-    </style>
-</head>
+    </script>
 </body>
 </html>
