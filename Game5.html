@@ -211,7 +211,7 @@
   <a-entity id="bushes"></a-entity>
   <a-entity id="boulders"></a-entity>
 
-  <a-entity id="npc-group" position="0 0 -6">
+  <a-entity id="npc-group" position="0 0 -6"> <!-- NPC group for interaction -->
     <a-box id="npc" color="#FFD700" position="0 1 0" depth="0.6" height="2" width="1.2" class="clickable npc" shadow="cast:true" static-body></a-box>
     <a-text value="Forest Elder (G to talk)" position="-1.6 2.6 0" color="#fff" align="center"></a-text>
   </a-entity>
@@ -295,7 +295,6 @@ const CONFIG = {
   RESPAWN_DELAY_MEDIUM: 180,
   RESPAWN_DELAY_LARGE: 300,
 
-  /* ADD THIS CONFIG FOR PICKUP RANGE */
   PICKUP_RANGE: 1.8 // How close the player needs to be to an item to show the hint
 };
 
@@ -777,6 +776,10 @@ document.addEventListener('keydown', e=>{
       interactPickup();
     }
   }
+  // ADDED FOR TALKING: Pressing 'G' to interact/talk
+  if(e.key.toLowerCase() === 'g'){
+      interactTalk(); // Call the talk function
+  }
 });
 document.addEventListener('keyup', e=>{
   if(!gameStarted) return;
@@ -981,17 +984,47 @@ function respawnPlayer(){
 function interactTalk(){
   if(state.isDead) return false;
   const p = player.object3D.position;
-  const elder = document.querySelector('#npc-group').object3D.position;
-  const villager = document.querySelector('#villager-far').object3D.position;
-  const shopHouse = document.querySelector('#shop-house').object3D.position;
-  if(Math.hypot(elder.x-p.x, elder.z-p.z) < 2.2){
-    if(state.quest==='Talk to the Forest Elder'){ state.quest='Collect 5 sticks for the Elder'; logInfo("Elder: 'The forest needs help. Gather 5 sticks for me.'"); }
-    else if(state.quest==='Collect 5 sticks for the Elder'){ if((state.inventory.stick||0) >=5){ state.inventory.stick-=5; state.quest='Complete! Elder teaches Fireball.'; if(!state.knownSpells.has('fireball')){ state.knownSpells.add('fireball'); state.spells.push({id:'fireball',name:'Fireball',charges:2,max:2,dmg:36,cost:CONFIG.FIREBALL_MANA_COST}); state.inventory.fireball +=2; logInfo("Elder: 'Thank you! Here is a token of my gratitude and knowledge.'"); } else logInfo("Elder: 'You have already brought the sticks. Well done.'"); } else logInfo("Elder: 'You have not yet gathered the sticks.'"); }
-    refreshUI(); return true;
+  const elderEntity = document.querySelector('#npc-group'); // Get the NPC entity
+
+  if (!elderEntity || !elderEntity.object3D) {
+    console.error("NPC entity or its object3D not found!");
+    return false;
   }
-  if(Math.hypot(villager.x-p.x, villager.z-p.z) < 2.2){ logInfo('Villager: "Stay safe out there!"'); return true; }
-  if(Math.abs(p.x-shopHouse.x) < 2 && Math.abs(p.z-shopHouse.z) < 2){ interactShop(); return true; }
-  logInfo('No one to talk to'); return false;
+  const elder = elderEntity.object3D.position;
+
+  const distanceToElder = Math.hypot(elder.x - p.x, elder.z - p.z);
+  console.log(`Distance to Elder: ${distanceToElder}`); // Log the distance for debugging
+
+  if(distanceToElder < 2.2){ // Increased interaction range slightly just in case
+    console.log("Player is close enough to talk."); // Debug log
+
+    if(state.quest==='Talk to the Forest Elder'){
+      state.quest='Collect 5 sticks for the Elder';
+      logInfo("Elder: 'The forest needs help. Gather 5 sticks for me.'");
+    }
+    else if(state.quest==='Collect 5 sticks for the Elder'){
+      if((state.inventory.stick||0) >=5){
+        state.inventory.stick-=5;
+        state.quest='Complete! Elder teaches Fireball.';
+        if(!state.knownSpells.has('fireball')){
+          state.knownSpells.add('fireball');
+          state.spells.push({id:'fireball',name:'Fireball',charges:2,max:2,dmg:36,cost:CONFIG.FIREBALL_MANA_COST});
+          state.inventory.fireball +=2;
+          logInfo("Elder: 'Thank you! Here is a token of my gratitude and knowledge.'");
+        } else {
+          logInfo("Elder: 'You have already brought the sticks. Well done.'");
+        }
+      } else {
+        logInfo("Elder: 'You have not yet gathered the sticks.'");
+      }
+    }
+    refreshUI();
+    return true;
+  }
+  // Removed villager and shop interaction from here to keep focus on the NPC talk
+  // If you want those to work, they need their own distance checks.
+  console.log('No one to talk to'); // Log if not close enough
+  return false;
 }
 
 function interactPickup(){
@@ -1114,13 +1147,13 @@ const recipes = [
   { id: 'ruby-necklace', name: 'Ruby Necklace', materials: { ruby: 2, planks: 1 } }
 ];
 function renderCraftingRecipes(){ craftingList.innerHTML=''; recipes.forEach(recipe=>{ if(recipe.id==='fireball' && !state.knownSpells.has('fireball')){ const recipeElement = document.createElement('div'); recipeElement.classList.add('craft-row'); recipeElement.innerHTML = `<div class="craft-left"><img src="${getItemIconUrl(recipe.id)}" alt="${recipe.name}"><span style="opacity:0.5">${recipe.name} (Learn Fireball to craft)</span></div><button disabled style="opacity:.4; cursor:not-allowed">Locked</button>`; craftingList.appendChild(recipeElement); return; } const recipeElement = document.createElement('div'); recipeElement.classList.add('craft-row'); let canCraft = true; for(const [material,count] of Object.entries(recipe.materials)){ if((state.inventory[material]||0) < count){ canCraft=false; break; } } const materialString = Object.entries(recipe.materials).map(([i,c])=>`${i} x${c}`).join(', '); recipeElement.innerHTML = `<div class="craft-left"><img src="${getItemIconUrl(recipe.id)}" alt="${recipe.name}"><span>${recipe.name}</span></div><button onclick="craftItem('${recipe.id}')" class="ui-clickable" style="${!canCraft ? 'opacity: 0.5; cursor: not-allowed;' : ''}">Craft (${materialString})</button>`; craftingList.appendChild(recipeElement); }); }
-function craftItem(itemId){ const recipe = recipes.find(r=>r.id===itemId); if(!recipe) return; if(itemId==='fireball' && !state.knownSpells.has('fireball')){ showPrompt("You haven't learned Fireball yet."); return; } let canCraft = true; for(const [m,c] of Object.entries(recipe.materials)){ if((state.inventory[m]||0) < c){ canCraft=false; break; } } if(canCraft){ for(const [m,c] of Object.entries(recipe.materials)) state.inventory[m] -= c; state.inventory[itemId] = (state.inventory[itemId]||0) + 1; logInfo(`Crafted ${recipe.name}!`); refreshUI(); } else showPrompt(`Not enough materials to craft ${recipe.name}.`); }
+function craftItem(itemId){ const recipe = recipes.find(r=>r.id===itemId); if(!recipe) return; if(itemId==='fireball' && !state.knownSpells.has('fireball')){ showPrompt("You haven't learned Fireball yet."); return; } let canCraft = true; for(const [m,c] of Object.entries(recipe.materials)){ if((state.inventory[m]||0) < c){ canCraft=false; break; } } if(canCraft){ for(const [m,c] of Object.entries(recipe.materials)) state.inventory[m] -= c; state.inventory[itemId] = (state.inventory[itemId]||0) + 1; logInfo(`Crafted ${recipe.name}!`); refreshUI(); } else showPrompt(`Not enough materials to craft ${name}.`); }
 
 /* ========= Building preview & placement (kept) ========= */
 let buildModeActive = false; let currentBuildingPreview = null; let placedBuildings = []; let entitiesInScene = new Set();
 function showBuildingPreview(buildingType){ if(currentBuildingPreview){ currentBuildingPreview.parentNode && currentBuildingPreview.parentNode.removeChild(currentBuildingPreview); } currentBuildingPreview = document.createElement('a-entity'); currentBuildingPreview.setAttribute('id','build-preview'); currentBuildingPreview.setAttribute('geometry',{primitive:'box',width:4,height:3,depth:4}); currentBuildingPreview.setAttribute('material',{src:'#houseTex',opacity:0.4,transparent:true}); currentBuildingPreview.setAttribute('position','0 100 0'); currentBuildingPreview.style.display = 'block'; document.querySelector('a-scene').appendChild(currentBuildingPreview); }
 function hideBuildingPreview(){ if(currentBuildingPreview) currentBuildingPreview.style.display='none'; }
-function updateBuildingPreview(){ if(!buildModeActive || !currentBuildingPreview || currentBuildingPreview.style.display === 'none') return; const ray = rayFromCam(CONFIG.BUILD_MODE_RANGE); const groundY = getGroundYAt(ray.origin.x, ray.origin.z); const previewPos = { x: ray.origin.x, y: groundY + CONFIG.BUILD_MODE_OFFSET_Y + 1.5, z: ray.origin.z }; const collision = checkBuildingCollision(previewPos); currentBuildingPreview.setAttribute('material','opacity', collision ? 0.2 : 0.4); currentBuildingPreview.setAttribute('position', `${previewPos.x} ${previewPos.y} ${pos.z}`); }
+function updateBuildingPreview(){ if(!buildModeActive || !currentBuildingPreview || currentBuildingPreview.style.display === 'none') return; const ray = rayFromCam(CONFIG.BUILD_MODE_RANGE); const groundY = getGroundYAt(ray.origin.x, ray.origin.z); const previewPos = { x: ray.origin.x, y: groundY + CONFIG.BUILD_MODE_OFFSET_Y + 1.5, z: ray.origin.z }; const collision = checkBuildingCollision(previewPos); currentBuildingPreview.setAttribute('material','opacity', collision ? 0.2 : 0.4); currentBuildingPreview.setAttribute('position', `${previewPos.x} ${previewPos.y} ${previewPos.z}`); }
 function checkBuildingCollision(pos){ const buildingSize = { width:4, height:3, depth:4 }; const buffer = 0.2; if(pos.y < CONFIG.PLAYER_GROUND_Y + buildingSize.height/2) return true; const collisionRaycaster = new THREE.Raycaster(); const halfSize = new THREE.Vector3(buildingSize.width/2, buildingSize.height/2, buildingSize.depth/2); const testPoints = [ new THREE.Vector3(pos.x - halfSize.x + buffer, pos.y, pos.z - halfSize.z + buffer), new THREE.Vector3(pos.x + halfSize.x - buffer, pos.y, pos.z - halfSize.z + buffer), new THREE.Vector3(pos.x - halfSize.x + buffer, pos.y, pos.z + halfSize.z - buffer), new THREE.Vector3(pos.x + halfSize.x - buffer, pos.y, pos.z + halfSize.z - buffer), new THREE.Vector3(pos.x, pos.y + halfSize.y - buffer, pos.z) ]; for(const testPoint of testPoints){ const origin = new THREE.Vector3(testPoint.x, 20, testPoint.z); const direction = new THREE.Vector3(0,-1,0); collisionRaycaster.set(origin,direction,0,30); const staticNodes = [...document.querySelectorAll('[static-body]')].map(el => el.object3D).filter(obj => obj && obj.el !== currentBuildingPreview); const hits = collisionRaycaster.intersectObjects(staticNodes,true); if(hits.length>0){ if(hits[0].point.y > testPoint.y - buffer) return true; } } return false; }
 function placeBuilding(buildingType){
   if(!buildModeActive || !currentBuildingPreview || currentBuildingPreview.style.display==='none') return;
