@@ -9,7 +9,7 @@
 <style>
   /* UI & game styles (kept compact) */
   html,body{height:100%;margin:0;background:#000;font-family:system-ui,Segoe UI,Roboto,Arial}
-  #ui-root{position:absolute;inset:0;z-index:9999;pointer-events:none}
+  #ui-root{position:absolute; inset:0;z-index:9999;pointer-events:none}
   .ui-clickable, #start-btn, #more-btn, #close-bp, .hotbar-item, button { pointer-events:auto }
   #hud{position:absolute;left:12px;top:12px;color:#fff;width:360px;z-index:10000}
   .label-row{display:flex;justify-content:space-between;font-size:13px}
@@ -58,6 +58,22 @@
   /* Climb hint and floating XP CSS */
   #climb-hint { position: absolute; left: 50%; bottom: 140px; transform: translateX(-50%); background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 8px; color: #fff; z-index: 10040; display: none; pointer-events: none; font-weight:700; }
   .floating-xp { position: absolute; transform: translate(-50%, -50%); color: #39ffb6; font-weight:800; text-shadow: 0 0 6px rgba(57,255,182,0.6); pointer-events:none; transition: transform 1s ease-out, opacity 1s ease-out; opacity:1; }
+
+  /* ADD THIS NEW STYLE FOR THE PICKUP HINT */
+  #pickup-hint {
+    position: absolute;
+    left: 50%;
+    bottom: 120px; /* Adjust this value to position it where you want */
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.6);
+    padding: 8px 12px;
+    border-radius: 8px;
+    color: #fff;
+    z-index: 10040;
+    display: none; /* Hidden by default */
+    pointer-events: none;
+    font-weight:700;
+  }
 </style>
 </head>
 <body>
@@ -146,6 +162,8 @@
   <div id="deathOverlay"><div class="box"><div id="deathText" style="font-size:26px;font-weight:800;margin-bottom:6px">You have died</div><div id="respawnCountdown" style="font-size:18px">Respawning in 4...</div></div></div>
 
   <div id="climb-hint" role="status">Press C to climb</div>
+  <!-- ADD THIS NEW ELEMENT FOR THE PICKUP HINT -->
+  <div id="pickup-hint" role="status">Press E to pick up</div>
 </div>
 
 <a-scene physics="gravity: -9.8" renderer="antialias:true; colorManagement:true" shadow="type:pcfsoft">
@@ -275,7 +293,10 @@ const CONFIG = {
 
   RESPAWN_DELAY_SHORT: 120,
   RESPAWN_DELAY_MEDIUM: 180,
-  RESPAWN_DELAY_LARGE: 300
+  RESPAWN_DELAY_LARGE: 300,
+
+  /* ADD THIS CONFIG FOR PICKUP RANGE */
+  PICKUP_RANGE: 1.8 // How close the player needs to be to an item to show the hint
 };
 
 /* ========= STATE ========= */
@@ -294,7 +315,7 @@ const state = {
 
 /* ========= Globals ========= */
 const respawnTimers = {};
-const activeResources = new Set();
+const activeResources = new Set(); // Keep track of spawned items
 const enemiesRoot = document.querySelector('#enemies');
 let activeEnemies = [];
 let gameStarted = false;
@@ -309,6 +330,10 @@ player.__grounded = true;
 player.__stamina = state.stamina;
 player.__climbing = { active:false };
 player.__controlsLocked = { jump:false, sprint:false };
+
+// NEW: Variables for pickup hint
+let nearestCollectible = null;
+const pickupHintEl = document.getElementById('pickup-hint');
 
 /* Utility: floating text (A-Frame text entity) */
 function showFloatingText(msg, pos, color='#fff', duration=1100) {
@@ -477,9 +502,9 @@ function spawnCollectible(type,pos){
 
 /* spawnResource wrapper that schedules respawn */
 function spawnResource(type,pos){
-  if(type==='boulder'){ const res = spawnBoulder(pos.x,pos.z); if(res){ activeResources.add(res); scheduleRespawn('boulder',pos,CONFIG.RESPAWN_DELAY_LARGE);} return; }
-  if(type==='bush'){ const res = spawnBush(pos.x,pos.z); if(res){ activeResources.add(res); scheduleRespawn('bush',pos,CONFIG.RESPAWN_DELAY_LARGE);} return; }
-  if(type==='tree'){ const res = spawnTree(pos.x,pos.z); if(res){ activeResources.add(res); scheduleRespawn('tree',pos,CONFIG.RESPAWN_DELAY_LARGE);} return; }
+  if(type==='boulder'){ const res = spawnBoulder(pos.x,pos.z); if(res){ activeResources.add(res); scheduleRespawn('boulder',pos, CONFIG.RESPAWN_DELAY_LARGE); } return; }
+  if(type==='bush'){ const res = spawnBush(pos.x,pos.z); if(res){ activeResources.add(res); scheduleRespawn('bush',pos, CONFIG.RESPAWN_DELAY_LARGE); } return; }
+  if(type==='tree'){ const res = spawnTree(pos.x,pos.z); if(res){ activeResources.add(res); scheduleRespawn('tree',pos, CONFIG.RESPAWN_DELAY_LARGE); } return; }
   const resource = spawnCollectible(type,pos);
   if(resource){ activeResources.add(resource); let delay = CONFIG.RESPAWN_DELAY_SHORT; if(type==='potion') delay = CONFIG.RESPAWN_DELAY_MEDIUM; scheduleRespawn(type,pos,delay); }
 }
@@ -746,6 +771,12 @@ document.addEventListener('keydown', e=>{
     const hotbarItems = Array.from(document.querySelectorAll('.hotbar-item'));
     if(hotbarItems[idx]) equipItem(hotbarItems[idx].dataset.item);
   }
+  // ADDED FOR PICKUP: Pressing 'E' to pick up items
+  if(e.key.toLowerCase() === 'e'){
+    if(nearestCollectible){ // Check if a collectible is currently in range and highlighted
+      interactPickup();
+    }
+  }
 });
 document.addEventListener('keyup', e=>{
   if(!gameStarted) return;
@@ -966,23 +997,56 @@ function interactTalk(){
 function interactPickup(){
   if(state.isDead) return false;
   const p = player.object3D.position;
-  let nearest=null, nd=9e9;
-  activeResources.forEach(res=>{ if(!res || !res.parentNode) return; const cp = res.object3D.position; const d = Math.hypot(cp.x-p.x, cp.z-p.z); if(d<1.6 && d<nd){ nd=d; nearest=res; } });
+
+  // Use the nearestCollectible found in the gameLoop
+  const nearest = nearestCollectible;
+
   if(nearest){
     const t = nearest.__type;
-    if(['tree','boulder','bush'].includes(t)){ logInfo(`This requires mining with a ${t==='tree'?'stone axe':t==='boulder'?'stone pickaxe':'stone sword'}.`); return false; }
+    if(['tree','boulder','bush'].includes(t)){
+      logInfo(`This requires mining with a ${t === 'tree' ? 'stone axe' : t === 'boulder' ? 'stone pickaxe' : 'stone sword'}.`);
+      return false;
+    }
+
     const pos = { x: nearest.object3D.position.x, z: nearest.object3D.position.z };
-    if(t==='ruby'){ state.inventory.ruby = (state.inventory.ruby||0) + 1; logInfo('Picked up a ruby! ✨'); }
-    else { state.inventory[t] = (state.inventory[t]||0) + 1; logInfo(`Picked up a ${t}.`); }
-    activeResources.delete(nearest); nearest.parentNode && nearest.parentNode.removeChild(nearest);
+
+    // Add item to inventory
+    if (t === 'ruby') {
+      state.inventory.ruby = (state.inventory.ruby || 0) + 1;
+      logInfo('Picked up a ruby! ✨');
+    } else {
+      state.inventory[t] = (state.inventory[t] || 0) + 1;
+      logInfo(`Picked up a ${t}.`);
+    }
+
+    // Remove item from scene and clear respawn timer
+    activeResources.delete(nearest);
+    nearest.parentNode && nearest.parentNode.removeChild(nearest);
     const timerKey = `${t}-${pos.x.toFixed(2)}x${pos.z.toFixed(2)}`;
-    if(respawnTimers[timerKey]){ clearTimeout(respawnTimers[timerKey]); delete respawnTimers[timerKey]; }
-    refreshUI(); return true;
+    if(respawnTimers[timerKey]){
+      clearTimeout(respawnTimers[timerKey]);
+      delete respawnTimers[timerKey];
+    }
+
+    refreshUI();
+    // Clear nearestCollectible after pickup
+    nearestCollectible = null;
+    return true;
   }
+
+  // Check for water collection (this part remains the same as it's a different interaction type)
   for(let i=0;i<document.querySelectorAll('a-circle.clickable').length;i++){
-    const pond = document.querySelectorAll('a-circle.clickable')[i]; const po = pond.object3D.position; const d = Math.hypot(po.x-p.x,po.z-p.z);
-    if(d<2){ state.inventory.water=(state.inventory.water||0)+1; refreshUI(); logInfo('Collected some water. 💧'); return true; }
+    const pond = document.querySelectorAll('a-circle.clickable')[i];
+    const po = pond.object3D.position;
+    const d = Math.hypot(po.x-p.x,po.z-p.z);
+    if(d < 2){ // Standard interaction range for water
+      state.inventory.water=(state.inventory.water||0)+1;
+      refreshUI();
+      logInfo('Collected some water. 💧');
+      return true;
+    }
   }
+
   return false;
 }
 
@@ -1056,7 +1120,7 @@ function craftItem(itemId){ const recipe = recipes.find(r=>r.id===itemId); if(!r
 let buildModeActive = false; let currentBuildingPreview = null; let placedBuildings = []; let entitiesInScene = new Set();
 function showBuildingPreview(buildingType){ if(currentBuildingPreview){ currentBuildingPreview.parentNode && currentBuildingPreview.parentNode.removeChild(currentBuildingPreview); } currentBuildingPreview = document.createElement('a-entity'); currentBuildingPreview.setAttribute('id','build-preview'); currentBuildingPreview.setAttribute('geometry',{primitive:'box',width:4,height:3,depth:4}); currentBuildingPreview.setAttribute('material',{src:'#houseTex',opacity:0.4,transparent:true}); currentBuildingPreview.setAttribute('position','0 100 0'); currentBuildingPreview.style.display = 'block'; document.querySelector('a-scene').appendChild(currentBuildingPreview); }
 function hideBuildingPreview(){ if(currentBuildingPreview) currentBuildingPreview.style.display='none'; }
-function updateBuildingPreview(){ if(!buildModeActive || !currentBuildingPreview || currentBuildingPreview.style.display === 'none') return; const ray = rayFromCam(CONFIG.BUILD_MODE_RANGE); const groundY = getGroundYAt(ray.origin.x, ray.origin.z); const previewPos = { x: ray.origin.x, y: groundY + CONFIG.BUILD_MODE_OFFSET_Y + 1.5, z: ray.origin.z }; const collision = checkBuildingCollision(previewPos); currentBuildingPreview.setAttribute('material','opacity', collision ? 0.2 : 0.4); currentBuildingPreview.setAttribute('position', `${previewPos.x} ${previewPos.y} ${previewPos.z}`); }
+function updateBuildingPreview(){ if(!buildModeActive || !currentBuildingPreview || currentBuildingPreview.style.display === 'none') return; const ray = rayFromCam(CONFIG.BUILD_MODE_RANGE); const groundY = getGroundYAt(ray.origin.x, ray.origin.z); const previewPos = { x: ray.origin.x, y: groundY + CONFIG.BUILD_MODE_OFFSET_Y + 1.5, z: ray.origin.z }; const collision = checkBuildingCollision(previewPos); currentBuildingPreview.setAttribute('material','opacity', collision ? 0.2 : 0.4); currentBuildingPreview.setAttribute('position', `${previewPos.x} ${previewPos.y} ${pos.z}`); }
 function checkBuildingCollision(pos){ const buildingSize = { width:4, height:3, depth:4 }; const buffer = 0.2; if(pos.y < CONFIG.PLAYER_GROUND_Y + buildingSize.height/2) return true; const collisionRaycaster = new THREE.Raycaster(); const halfSize = new THREE.Vector3(buildingSize.width/2, buildingSize.height/2, buildingSize.depth/2); const testPoints = [ new THREE.Vector3(pos.x - halfSize.x + buffer, pos.y, pos.z - halfSize.z + buffer), new THREE.Vector3(pos.x + halfSize.x - buffer, pos.y, pos.z - halfSize.z + buffer), new THREE.Vector3(pos.x - halfSize.x + buffer, pos.y, pos.z + halfSize.z - buffer), new THREE.Vector3(pos.x + halfSize.x - buffer, pos.y, pos.z + halfSize.z - buffer), new THREE.Vector3(pos.x, pos.y + halfSize.y - buffer, pos.z) ]; for(const testPoint of testPoints){ const origin = new THREE.Vector3(testPoint.x, 20, testPoint.z); const direction = new THREE.Vector3(0,-1,0); collisionRaycaster.set(origin,direction,0,30); const staticNodes = [...document.querySelectorAll('[static-body]')].map(el => el.object3D).filter(obj => obj && obj.el !== currentBuildingPreview); const hits = collisionRaycaster.intersectObjects(staticNodes,true); if(hits.length>0){ if(hits[0].point.y > testPoint.y - buffer) return true; } } return false; }
 function placeBuilding(buildingType){
   if(!buildModeActive || !currentBuildingPreview || currentBuildingPreview.style.display==='none') return;
@@ -1229,6 +1293,35 @@ seedBasics();
 function gameLoop(now){
   const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
   lastFrameTime = now;
+
+  // --- NEW: Update pickup hint visibility ---
+  const pPos = player.object3D.position;
+  let foundCollectible = false;
+  nearestCollectible = null; // Reset for this frame
+
+  activeResources.forEach(res => {
+    if (!res || !res.parentNode) return;
+    const cp = res.object3D.position;
+    const dist = Math.hypot(cp.x - pPos.x, cp.z - pPos.z);
+
+    // Check if it's a pickable item (not a tree, boulder, bush, etc.)
+    const isPickable = !['tree', 'boulder', 'bush'].includes(res.__type);
+
+    if (isPickable && dist < CONFIG.PICKUP_RANGE) {
+      foundCollectible = true;
+      // We'll store the nearest one if multiple are in range, to ensure we try to pick up the closest
+      if (!nearestCollectible || dist < Math.hypot(nearestCollectible.object3D.position.x - pPos.x, nearestCollectible.object3D.position.z - pPos.z)) {
+          nearestCollectible = res;
+      }
+    }
+  });
+
+  if (foundCollectible) {
+    pickupHintEl.style.display = 'block'; // Show the hint
+  } else {
+    pickupHintEl.style.display = 'none'; // Hide the hint
+  }
+  // --- END NEW PICKUP HINT LOGIC ---
 
   if(gameStarted && !state.isDead){
     // detect climbable first (for hint)
