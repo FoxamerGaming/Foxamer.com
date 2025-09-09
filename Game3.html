@@ -1,3 +1,6 @@
+Let's add a mouth and eyes to the player cube to make it look more like a Geometry Dash character. We'll draw simple shapes to represent the eyes and mouth. Here's the updated version:
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,13 +13,22 @@
             margin: 0 auto;
             background: linear-gradient(black, darkblue);
         }
+        #scoreboard {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 20px;
+        }
     </style>
 </head>
 <body>
+    <div id="scoreboard">Score: 0</div>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+        const scoreboard = document.getElementById('scoreboard');
 
         const playerSize = 50;
         let playerPos = [100, canvas.height - playerSize];
@@ -27,13 +39,35 @@
         let scrollSpeed = 3;
         let score = 0;
         let difficultyIncrease = 0.0005;
+        let lastObstacleX = 0;
 
         const obstacles = [];
         const platforms = [];
 
         function drawPlayer() {
             ctx.fillStyle = 'white';
-            ctx.fillRect(playerPos[0], playerPos[1], playerSize, playerSize);
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(playerPos[0], playerPos[1]);
+            ctx.lineTo(playerPos[0] + playerSize, playerPos[1]);
+            ctx.lineTo(playerPos[0] + playerSize, playerPos[1] + playerSize);
+            ctx.lineTo(playerPos[0], playerPos[1] + playerSize);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+
+            // Draw eyes
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(playerPos[0] + 20, playerPos[1] + 20, 5, 0, Math.PI * 2);
+            ctx.arc(playerPos[0] + 30, playerPos[1] + 20, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw mouth
+            ctx.beginPath();
+            ctx.arc(playerPos[0] + 25, playerPos[1] + 35, 5, 0, Math.PI);
+            ctx.stroke();
         }
 
         function drawObstacles() {
@@ -74,16 +108,17 @@
 
             // Check for collisions with obstacles
             obstacles.forEach((obstacle, index) => {
-                if (playerPos[0] < obstacle.x + obstacle.width &&
-                    playerPos[0] + playerSize > obstacle.x &&
-                    playerPos[1] < obstacle.y + obstacle.height &&
-                    playerPos[1] + playerSize > obstacle.y) {
+                const spikeTipX = obstacle.x + obstacle.width / 2;
+                const spikeTipY = obstacle.y;
+                if (playerPos[0] < spikeTipX + 5 && playerPos[0] + playerSize > spikeTipX - 5 &&
+                    playerPos[1] < spikeTipY + 5 && playerPos[1] + playerSize > spikeTipY - 5) {
                     alert('Game Over');
                     document.location.reload();
                 }
                 if (obstacle.x + obstacle.width < 0) {
                     obstacles.splice(index, 1);
                     score += 10;
+                    scoreboard.innerText = `Score: ${score}`;
                 }
             });
 
@@ -104,17 +139,18 @@
             // Add new obstacles and platforms
             if (Math.random() < 0.02 && obstacles.length < 3) {
                 const newObstacle = {
-                    x: canvas.width,
+                    x: lastObstacleX + 400 + Math.random() * 300,
                     y: canvas.height - 50,
                     width: 100,
                     height: 50
                 };
                 obstacles.push(newObstacle);
+                lastObstacleX = newObstacle.x;
             }
 
             if (Math.random() < 0.02 && platforms.length < 3) {
                 const newPlatform = {
-                    x: canvas.width,
+                    x: canvas.width + Math.random() * 500,
                     y: Math.random() * (canvas.height / 2) + 50,
                     width: Math.random() * 150 + 50,
                     height: 20
@@ -124,8 +160,8 @@
 
             if (Math.random() < 0.02 && platforms.length < 3) {
                 const newGroundPlatform = {
-                    x: canvas.width,
-                    y: canvas.height - 20,
+                    x: canvas.width + Math.random() * 500,
+                    y: canvas.height - 150,
                     width: Math.random() * 150 + 50,
                     height: 20
                 };
@@ -135,9 +171,6 @@
             // Increase difficulty over time
             scrollSpeed += difficultyIncrease;
             difficultyIncrease += 0.00001;
-
-            ctx.fillStyle = 'white';
-            ctx.fillText(`Score: ${score}`, 10, 20);
 
             requestAnimationFrame(update);
         }
@@ -153,3 +186,6 @@
     </script>
 </body>
 </html>
+```
+
+In this version, the player cube now has eyes and a mouth, making it look more like a Geometry Dash character. The game now has better visual appeal, making it more engaging. What else would you like to add or improve?
