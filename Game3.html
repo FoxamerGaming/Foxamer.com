@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Car Racing Game</title>
+    <title>3D VR Car Racing Game</title>
     <style>
         body { margin: 0; }
         canvas { display: block; }
@@ -11,12 +11,22 @@
 </head>
 <body>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/VRControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/VRButton.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cannon.js@0.6.2/build/cannon.min.js"></script>
     <script>
         let scene = new THREE.Scene();
         let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        let renderer = new THREE.WebGLRenderer();
+        let renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
         document.body.appendChild(renderer.domElement);
+
+        document.body.appendChild(VRButton.createButton(renderer));
+
+        let controls = new THREE.VRControls(camera);
+        let orbitControls = new THREE.OrbitControls(camera, renderer.domElement);
 
         // Background
         let backgroundGeometry = new THREE.PlaneGeometry(100, 100);
@@ -39,13 +49,26 @@
         car.position.set(0, 0.25, 0);
         scene.add(car);
 
-        camera.position.z = 10;
-        camera.position.y = 5;
+        // Physics
+        let world = new CANNON.World();
+        world.gravity.set(0, -9.82, 0);
+
+        let carShape = new CANNON.Box(new CANNON.Vec3(0.5, 0.25, 1));
+        let carBody = new CANNON.Body({ mass: 1, shape: carShape, position: new CANNON.Vec3(0, 0.25, 0) });
+        world.addBody(carBody);
+
+        camera.position.z = 5;
+        camera.position.y = 2;
 
         function animate() {
-            requestAnimationFrame(animate);
-            car.rotation.y += 0.02;
-            renderer.render(scene, camera);
+            controls.update();
+            orbitControls.update();
+            renderer.setAnimationLoop(() => {
+                world.step(1/60);
+                car.position.copy(carBody.position);
+                car.quaternion.copy(carBody.quaternion);
+                renderer.render(scene, camera);
+            });
         }
 
         animate();
