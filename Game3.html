@@ -17,39 +17,73 @@
             color: white;
             font-size: 20px;
         }
+        #lastScore {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            font-size: 20px;
+        }
     </style>
 </head>
 <body>
     <div id="scoreboard">Score: 0</div>
+    <div id="lastScore">Last Score: 0</div>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const scoreboard = document.getElementById('scoreboard');
+        const lastScore = document.getElementById('lastScore');
 
         const playerSize = 50;
         let playerPos = [100, canvas.height - playerSize];
-        const playerSpeed = 10;
-        let isJumping = false;
-        let gravity = 1;
-        let lift = -20;
-        let scrollSpeed = 3;
+        let playerVel = 0;
+        const gravity = 1;
+        let scrollSpeed = 5;
         let score = 0;
+        let lastScoreValue = 0;
         let difficultyIncrease = 0.0005;
         let lastObstacleX = 0;
+        let flip = false;
+        let flipAngle = 0;
+        const flipDuration = 200; // Duration of the flip animation in milliseconds
+        let flipStartTime = 0;
 
         const obstacles = [];
         const platforms = [];
 
         function drawPlayer() {
+            ctx.save();
+            ctx.translate(playerPos[0] + playerSize / 2, playerPos[1] + playerSize / 2);
+            if (flip) {
+                const currentTime = Date.now();
+                const elapsedTime = currentTime - flipStartTime;
+                if (elapsedTime < flipDuration) {
+                    flipAngle = (elapsedTime / flipDuration) * Math.PI;
+                } else {
+                    flipAngle = Math.PI;
+                }
+            } else {
+                const currentTime = Date.now();
+                const elapsedTime = currentTime - flipStartTime;
+                if (elapsedTime < flipDuration) {
+                    flipAngle = Math.PI - (elapsedTime / flipDuration) * Math.PI;
+                } else {
+                    flipAngle = 0;
+                }
+            }
+            ctx.rotate(flipAngle);
+            ctx.translate(-playerSize / 2, -playerSize / 2);
+
             ctx.fillStyle = 'white';
             ctx.strokeStyle = 'black';
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo(playerPos[0], playerPos[1]);
-            ctx.lineTo(playerPos[0] + playerSize, playerPos[1]);
-            ctx.lineTo(playerPos[0] + playerSize, playerPos[1] + playerSize);
-            ctx.lineTo(playerPos[0], playerPos[1] + playerSize);
+            ctx.moveTo(0, 0);
+            ctx.lineTo(playerSize, 0);
+            ctx.lineTo(playerSize, playerSize);
+            ctx.lineTo(0, playerSize);
             ctx.closePath();
             ctx.fill();
             ctx.stroke();
@@ -57,14 +91,16 @@
             // Draw eyes
             ctx.fillStyle = 'black';
             ctx.beginPath();
-            ctx.arc(playerPos[0] + 20, playerPos[1] + 20, 5, 0, Math.PI * 2);
-            ctx.arc(playerPos[0] + 30, playerPos[1] + 20, 5, 0, Math.PI * 2);
+            ctx.arc(20, 20, 5, 0, Math.PI * 2);
+            ctx.arc(30, 20, 5, 0, Math.PI * 2);
             ctx.fill();
 
             // Draw mouth
             ctx.beginPath();
-            ctx.arc(playerPos[0] + 25, playerPos[1] + 35, 5, 0, Math.PI);
+            ctx.arc(25, 35, 5, 0, Math.PI);
             ctx.stroke();
+
+            ctx.restore();
         }
 
         function drawObstacles() {
@@ -94,13 +130,13 @@
             drawObstacles();
             drawPlatforms();
 
-            if (isJumping) {
-                playerPos[1] += lift;
-                lift += gravity;
-                if (playerPos[1] + playerSize >= canvas.height) {
-                    playerPos[1] = canvas.height - playerSize;
-                    isJumping = false;
-                }
+            playerVel += gravity;
+            playerPos[1] += playerVel;
+
+            if (playerPos[1] + playerSize >= canvas.height) {
+                playerPos[1] = canvas.height - playerSize;
+                playerVel = 0;
+                flip = false;
             }
 
             // Check for collisions with obstacles
@@ -109,8 +145,9 @@
                 const spikeTipY = obstacle.y;
                 if (playerPos[0] < spikeTipX + 5 && playerPos[0] + playerSize > spikeTipX - 5 &&
                     playerPos[1] < spikeTipY + 5 && playerPos[1] + playerSize > spikeTipY - 5) {
-                    alert('Game Over');
-                    document.location.reload();
+                    lastScoreValue = score;
+                    lastScore.innerText = `Last Score: ${lastScoreValue}`;
+                    resetGame();
                 }
                 if (obstacle.x + obstacle.width < 0) {
                     obstacles.splice(index, 1);
@@ -126,7 +163,15 @@
                     playerPos[1] < platform.y + platform.height &&
                     playerPos[1] + playerSize > platform.y) {
                     playerPos[1] = platform.y - playerSize;
-                    isJumping = false;
+                    playerVel = 0;
+                    flip = false;
+                }
+                if (playerPos[0] < platform.x + platform.width &&
+                    playerPos[0] + playerSize > platform.x &&
+                    playerPos[1] + playerSize > platform.y &&
+                    playerPos[1] < platform.y) {
+                    playerVel = 0;
+                    playerPos[1] = platform.y + platform.height;
                 }
                 if (platform.x + platform.width < 0) {
                     platforms.splice(index, 1);
@@ -135,8 +180,13 @@
 
             // Add new obstacles and platforms
             if (Math.random() < 0.02 && obstacles.length < 3) {
+                let newObstacleX;
+                do {
+                    newObstacleX = lastObstacleX + 400 + Math.random() * 300;
+                } while (obstacles.some(obstacle => Math.abs(obstacle.x - newObstacleX) < 200));
+
                 const newObstacle = {
-                    x: lastObstacleX + 400 + Math.random() * 300,
+                    x: newObstacleX,
                     y: canvas.height - 50,
                     width: 100,
                     height: 50
@@ -172,10 +222,24 @@
             requestAnimationFrame(update);
         }
 
+        function resetGame() {
+            playerPos = [100, canvas.height - playerSize];
+            playerVel = 0;
+            scrollSpeed = 5;
+            score = 0;
+            scoreboard.innerText = `Score: ${score}`;
+            obstacles.length = 0;
+            platforms.length = 0;
+            lastObstacleX = 0;
+            flip = false;
+            flipAngle = 0;
+        }
+
         document.addEventListener('keydown', (event) => {
-            if (event.key === ' ' && !isJumping) {
-                isJumping = true;
-                lift = -20;
+            if (event.key === ' ' && playerVel === 0) {
+                playerVel = -20;
+                flip = true;
+                flipStartTime = Date.now();
             }
         });
 
