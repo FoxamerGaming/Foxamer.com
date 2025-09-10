@@ -74,6 +74,25 @@
     pointer-events: none;
     font-weight:700;
   }
+
+  /* Interact hint (NPC / shop) */
+  #interact-hint {
+    position: absolute;
+    left: 50%;
+    bottom: 160px;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,0.6);
+    padding: 8px 12px;
+    border-radius: 8px;
+    color: #fff;
+    z-index: 10040;
+    display: none;
+    pointer-events: none;
+    font-weight:700;
+  }
+
+  /* Selected inventory slot highlight */
+  .slot.selected { box-shadow: 0 0 0 2px #39ffb6 inset; border-color:#39ffb6; }
 </style>
 </head>
 <body>
@@ -81,7 +100,7 @@
   <div id="intro">
     <h1>Magic Survival</h1>
     <p>You awaken in the Emerald Vale with nothing. Scrounge sticks, rocks, and mushrooms, craft your first tools, then earn the Elder’s trust. Beware creatures in the wilds—most ignore you unless you strike first.</p>
-    <div class="muted" style="margin-bottom:10px">Controls: WASD move · Mouse look (click to lock) · Shift sprint · E pick up · G talk/interact · Left Click attack/place · Right Click fireball · Space jump · B build · C climb</div>
+    <div class="muted" style="margin-bottom:10px">Controls: WASD move · Mouse look (click to lock) · Shift sprint · E pick up / equip · G talk/interact · Left Click attack/place · Right Click fireball · Space jump · B build · C climb</div>
     <button id="start-btn">Start Adventure</button>
   </div>
 
@@ -106,10 +125,11 @@
   </div>
 
   <div id="hotbar" role="toolbar" aria-label="Hotbar">
-    <div class="hotbar-item" data-item="stone-axe" title="Stone Axe"><img id="hb2" alt=""><div class="hotbar-key">1</div></div>
-    <div class="hotbar-item" data-item="wood-staff" title="Wood Staff"><img id="hb3" alt=""><div class="hotbar-key">2</div></div>
-    <div class="hotbar-item" data-item="stone-pickaxe" title="Stone Pickaxe"><img id="hb4" alt=""><div class="hotbar-key">3</div></div>
-    <div class="hotbar-item" data-item="stone-sword" title="Stone Sword"><img id="hb5" alt=""><div class="hotbar-key">4</div></div>
+    <!-- hotbar slots intentionally left empty; player must craft and equip from backpack -->
+    <div class="hotbar-item" data-item="" title=""><img alt=""><div class="hotbar-key">1</div></div>
+    <div class="hotbar-item" data-item="" title=""><img alt=""><div class="hotbar-key">2</div></div>
+    <div class="hotbar-item" data-item="" title=""><img alt=""><div class="hotbar-key">3</div></div>
+    <div class="hotbar-item" data-item="" title=""><img alt=""><div class="hotbar-key">4</div></div>
     <div id="more-btn" class="ui-clickable" title="Open Backpack">⋯</div>
   </div>
 
@@ -126,7 +146,7 @@
           <div id="craft-list"></div>
         </div>
         <div style="background:rgba(255,255,255,0.02);padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03)">
-          <div id="desc" class="muted">Pick up materials with <b>E</b> to craft. Talk to the Elder with <b>G</b>.</div>
+          <div id="desc" class="muted">Pick up materials with <b>E</b> to craft. Talk to the Elder with <b>G</b>. To equip crafted tools: open Backpack, tap a slot and press <b>E</b>.</div>
         </div>
       </div>
     </div>
@@ -162,8 +182,9 @@
   <div id="deathOverlay"><div class="box"><div id="deathText" style="font-size:26px;font-weight:800;margin-bottom:6px">You have died</div><div id="respawnCountdown" style="font-size:18px">Respawning in 4...</div></div></div>
 
   <div id="climb-hint" role="status">Press C to climb</div>
-  <!-- ADD THIS NEW ELEMENT FOR THE PICKUP HINT -->
+  <!-- PICKUP + INTERACT HINTS -->
   <div id="pickup-hint" role="status">Press E to pick up</div>
+  <div id="interact-hint" role="status">Press G to interact</div>
 </div>
 
 <a-scene physics="gravity: -9.8" renderer="antialias:true; colorManagement:true" shadow="type:pcfsoft">
@@ -330,9 +351,12 @@ player.__stamina = state.stamina;
 player.__climbing = { active:false };
 player.__controlsLocked = { jump:false, sprint:false };
 
-// NEW: Variables for pickup hint
+// NEW: Variables for pickup hint / interact hint / inventory selection
 let nearestCollectible = null;
 const pickupHintEl = document.getElementById('pickup-hint');
+const interactHintEl = document.getElementById('interact-hint');
+let selectedInventorySlotIndex = -1;
+let selectedInventorySlotEl = null;
 
 /* Utility: floating text (A-Frame text entity) */
 function showFloatingText(msg, pos, color='#fff', duration=1100) {
@@ -452,7 +476,7 @@ function spawnBush(x,z){
   e.setAttribute('position',`${x} 0 ${z}`);
   e.setAttribute('static-body','');
   e.classList.add('bush','climbable');
-  for(let i=0;i<6;i++){ const s=document.createElement('a-sphere'); s.setAttribute('radius',0.35+Math.random()*0.25); s.setAttribute('color',i%2?'#126b34':'#0f7f39'); s.setAttribute('material','src:#leaf; roughness:1'); s.setAttribute('position',`${(Math.random()-.5)*0.9} ${0.35+Math.random()*0.2} ${(Math.random()-.5)*0.9}`); e.appendChild(s); }
+  for(let i=0;i<6;i++){ const s=document.createElement('a-sphere'); s.setAttribute('radius','0.35+Math.random()*0.25'); s.setAttribute('color',i%2?'#126b34':'#0f7f39'); s.setAttribute('material','src:#leaf; roughness:1'); s.setAttribute('position',`${(Math.random()-.5)*0.9} ${0.35+Math.random()*0.2} ${(Math.random()-.5)*0.9}`); e.appendChild(s); }
   e.__type='bush'; e.__data={hp:CONFIG.BUSH_HP};
   document.querySelector('#bushes').appendChild(e);
   activeResources.add(e);
@@ -465,7 +489,7 @@ function spawnBoulder(x,z){
   e.setAttribute('data-boulder','');
   e.setAttribute('static-body','');
   e.classList.add('boulder','climbable');
-  const s=document.createElement('a-sphere'); s.setAttribute('radius',0.65+Math.random()*0.3); s.setAttribute('color','#7a7a7a'); s.setAttribute('position','0 0.65 0');
+  const s=document.createElement('a-sphere'); s.setAttribute('radius','0.65+Math.random()*0.3'); s.setAttribute('color','#7a7a7a'); s.setAttribute('position','0 0.65 0');
   e.appendChild(s);
   e.__data={hp:CONFIG.MINING_ROCK_HP}; e.__type='boulder';
   document.querySelector('#boulders').appendChild(e);
@@ -681,8 +705,36 @@ function getItemIconUrl(itemType) {
   const assetElement = document.querySelector(`img#icon-${itemType}`);
   return assetElement ? assetElement.src : 'https://cdn-icons-png.flaticon.com/512/184/184400.png';
 }
-function setHotbarIconsOnLoad(){ if(document.querySelector('.hotbar-item[data-item="stone-axe"] img')) document.querySelector('.hotbar-item[data-item="stone-axe"] img').src = getItemIconUrl('stone-axe'); if(document.querySelector('.hotbar-item[data-item="wood-staff"] img')) document.querySelector('.hotbar-item[data-item="wood-staff"] img').src = getItemIconUrl('wood-staff'); if(document.querySelector('.hotbar-item[data-item="stone-pickaxe"] img')) document.querySelector('.hotbar-item[data-item="stone-pickaxe"] img').src = getItemIconUrl('stone-pickaxe'); if(document.querySelector('.hotbar-item[data-item="stone-sword"] img')) document.querySelector('.hotbar-item[data-item="stone-sword"] img').src = getItemIconUrl('stone-sword'); }
+function setHotbarIconsOnLoad(){
+  document.querySelectorAll('.hotbar-item').forEach(hb=>{
+    const item = hb.dataset.item || '';
+    if(item){
+      const img = hb.querySelector('img');
+      img.src = getItemIconUrl(item);
+      hb.title = item;
+    } else {
+      hb.querySelector('img').src = '';
+      hb.title = '';
+    }
+  });
+}
 setHotbarIconsOnLoad();
+
+function refreshHotbarVisuals(){
+  document.querySelectorAll('.hotbar-item').forEach(hb=>{
+    const item = hb.dataset.item || '';
+    const img = hb.querySelector('img');
+    if(item){
+      img.src = getItemIconUrl(item);
+      hb.title = item;
+    } else {
+      img.src = '';
+      hb.title = '';
+      hb.classList.remove('active');
+    }
+    hb.classList.toggle('active', item === state.equipped);
+  });
+}
 
 function renderInventorySlots(){
   invGrid.innerHTML=''; const maxSlots=36;
@@ -692,9 +744,29 @@ function renderInventorySlots(){
     if(i<inventoryItems.length){
       const [itemType,quantity]=inventoryItems[i];
       slot.innerHTML=`<img src="${getItemIconUrl(itemType)}" alt="${itemType}"><div class="qty">${quantity}</div>`;
+      slot.dataset.item = itemType;
+    } else {
+      slot.dataset.item = '';
     }
     invGrid.appendChild(slot);
   }
+
+  // attach click handlers to slots (tap to select)
+  invGrid.querySelectorAll('.slot').forEach(s=>{
+    s.addEventListener('click', (ev)=>{
+      // clicking selects the slot (tap)
+      if(selectedInventorySlotEl) selectedInventorySlotEl.classList.remove('selected');
+      selectedInventorySlotIndex = parseInt(s.dataset.index);
+      selectedInventorySlotEl = s;
+      if(selectedInventorySlotEl) selectedInventorySlotEl.classList.add('selected');
+      // if backspace or other behavior: nothing
+    });
+    s.addEventListener('dblclick', (ev)=>{
+      // double click still to consume small items
+      const itemImage = s.querySelector('img'); if(!itemImage) return; const itemType = itemImage.alt; if(!itemType) return;
+      if(itemType === 'water' || itemType === 'mushroom'){ consumeItem(itemType); }
+    });
+  });
 }
 function updateInventoryDisplay(){ renderInventorySlots(); }
 function logInfo(message){ const infolog = document.getElementById('infolog'); const el = document.createElement('div'); el.textContent = message; infolog.appendChild(el); if(infolog.children.length>18) infolog.removeChild(infolog.children[0]); infolog.scrollTop = infolog.scrollHeight; }
@@ -718,7 +790,7 @@ function refreshUI(){
   updateEnemyCount();
   document.getElementById('status').textContent = state.isDead ? 'Dead' : (player.__grounded ? 'Idle' : 'In Air');
   updateInventoryDisplay();
-  document.querySelectorAll('.hotbar-item').forEach(hb=> hb.classList.toggle('active', hb.dataset.item === state.equipped));
+  refreshHotbarVisuals();
 }
 
 /* ========= Start button ========= */
@@ -768,11 +840,24 @@ document.addEventListener('keydown', e=>{
   if(['1','2','3','4','5','6','7','8','9','0'].includes(e.key)){
     const idx = e.key === '0' ? 9 : parseInt(e.key)-1;
     const hotbarItems = Array.from(document.querySelectorAll('.hotbar-item'));
-    if(hotbarItems[idx]) equipItem(hotbarItems[idx].dataset.item);
+    if(hotbarItems[idx]) {
+      const item = hotbarItems[idx].dataset.item;
+      if(item) equipItem(item);
+    }
   }
-  // ADDED FOR PICKUP: Pressing 'E' to pick up items
+  // ADDED FOR PICKUP / EQUIP: Pressing 'E'
   if(e.key.toLowerCase() === 'e'){
+    // If backpack is open and a slot is selected, equip that item
+    if(backpack.classList.contains('open') && selectedInventorySlotEl && selectedInventorySlotEl.dataset.item){
+      const itemToEquip = selectedInventorySlotEl.dataset.item;
+      equipFromBackpack(itemToEquip);
+      return;
+    }
+    // Otherwise behave as pickup
     if(nearestCollectible){ // Check if a collectible is currently in range and highlighted
+      interactPickup();
+    } else {
+      // Attempt water/pond pickup too
       interactPickup();
     }
   }
@@ -797,7 +882,7 @@ document.addEventListener('mousedown', (e) => {
   if(!gameStarted) return;
   if(state.isDead) return;
   if(e.button === 0){
-    if(buildModeActive){ e.preventDefault(); if((state.inventory.house||0)>0) placeBuilding('house'); else showPrompt("You need to craft a house first!"); return; }
+    if(buildModeActive){ e.preventDefault(); if((state.inventory.house||0)>0) placeBuilding('house'); else showPrompt("You need to craft the house and place it!"); return; }
     if(state.equipped === 'stone-pickaxe'){ if(!mineBoulder()) meleeAttack(); }
     else if(state.equipped === 'stone-sword'){ if(!mineBush()) meleeAttack(); }
     else if(state.equipped === 'stone-axe'){ if(!chopTree()) meleeAttack(); }
@@ -1122,7 +1207,7 @@ const backpack = document.getElementById('backpack');
 const moreBtn = document.getElementById('more-btn');
 const closeBpBtn = document.getElementById('close-bp');
 moreBtn.addEventListener('click', ()=>{ backpack.classList.add('open'); logInfo("Opened backpack."); renderCraftingRecipes(); updateInventoryDisplay(); });
-closeBpBtn.addEventListener('click', ()=>{ backpack.classList.remove('open'); logInfo("Closed backpack."); });
+closeBpBtn.addEventListener('click', ()=>{ backpack.classList.remove('open'); logInfo("Closed backpack."); if(selectedInventorySlotEl) selectedInventorySlotEl.classList.remove('selected'); selectedInventorySlotEl=null; selectedInventorySlotIndex=-1; });
 
 invGrid.addEventListener('dblclick', (event) => {
   const slot = event.target.closest('.slot'); if(!slot) return; const itemImage = slot.querySelector('img'); if(!itemImage) return; const itemType = itemImage.alt; if(!itemType) return;
@@ -1132,7 +1217,40 @@ function consumeItem(itemType){ if(state.inventory[itemType] > 0){ state.invento
 
 /* Hotbar equip */
 function equipItem(itemId){ if(!itemId){ state.equipped=''; refreshUI(); return; } state.equipped = itemId; document.querySelectorAll('.hotbar-item').forEach(hb=> hb.classList.toggle('active', hb.dataset.item === itemId)); logInfo(`Equipped: ${itemId}`); refreshUI(); }
-document.querySelectorAll('.hotbar-item').forEach(hb=> hb.addEventListener('click', ()=> equipItem(hb.dataset.item)));
+document.querySelectorAll('.hotbar-item').forEach(hb=> hb.addEventListener('click', ()=> {
+  // clicking a hotbar slot with content equips that slot, clicking empty opens backpack
+  if(hb.dataset.item){ equipItem(hb.dataset.item); } else { backpack.classList.add('open'); renderCraftingRecipes(); updateInventoryDisplay(); logInfo("Opened backpack - craft and equip items using E."); }
+}));
+
+/* New: allowed equippable items */
+const ALLOWED_EQUIP = new Set(['wood-staff','stone-axe','stone-pickaxe','stone-sword']);
+
+/* Equip from backpack: itemType -> equip, put into first empty hotbar slot */
+function equipFromBackpack(itemType){
+  if(!itemType) { showPrompt("No item selected"); return false; }
+  if(!ALLOWED_EQUIP.has(itemType)){ showPrompt("You can't equip that item."); return false; }
+  if((state.inventory[itemType]||0) <= 0){ showPrompt("You don't have that item."); return false; }
+
+  // Equip to state
+  state.equipped = itemType;
+
+  // place into first empty hotbar slot if available
+  const hotbarItems = Array.from(document.querySelectorAll('.hotbar-item'));
+  let placed = false;
+  for(const hb of hotbarItems){
+    if(!(hb.dataset.item) || hb.dataset.item === ''){
+      hb.dataset.item = itemType;
+      placed = true;
+      break;
+    }
+  }
+  if(!placed){
+    // if no empty slot, don't move anything, just equip
+  }
+  refreshUI();
+  showPrompt(`Equipped ${itemType}`);
+  return true;
+}
 
 /* Crafting recipes */
 const recipes = [
@@ -1327,7 +1445,7 @@ function gameLoop(now){
   const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
   lastFrameTime = now;
 
-  // --- NEW: Update pickup hint visibility ---
+  // --- NEW: Update pickup hint visibility & nearest collectible ---
   const pPos = player.object3D.position;
   let foundCollectible = false;
   nearestCollectible = null; // Reset for this frame
@@ -1354,7 +1472,35 @@ function gameLoop(now){
   } else {
     pickupHintEl.style.display = 'none'; // Hide the hint
   }
-  // --- END NEW PICKUP HINT LOGIC ---
+
+  // --- NEW: detect interactable NPC/shop/pond and show interact hint ---
+  let showInteract = false;
+  let interactText = '';
+  // NPC elder
+  const elder = document.querySelector('#npc-group');
+  if(elder && elder.object3D){
+    const edPos = elder.object3D.position;
+    const dE = Math.hypot(edPos.x - pPos.x, edPos.z - pPos.z);
+    if(dE < 2.4){ showInteract = true; interactText = 'Press G to talk (E to equip from Backpack)'; }
+  }
+  // Shop
+  const shop = document.querySelector('#shop-house');
+  if(!showInteract && shop && shop.object3D){
+    const sPos = shop.object3D.position;
+    const dS = Math.hypot(sPos.x - pPos.x, sPos.z - pPos.z);
+    if(dS < 2.4){ showInteract = true; interactText = 'Press G to open shop'; }
+  }
+  // Pond detection
+  if(!showInteract){
+    document.querySelectorAll('a-circle.clickable').forEach(pond=>{
+      if(!pond.object3D) return;
+      const po = pond.object3D.position;
+      const d = Math.hypot(po.x - pPos.x, po.z - pPos.z);
+      if(d < 2.0){ showInteract = true; interactText = 'Press E to collect water'; }
+    });
+  }
+  if(showInteract){ interactHintEl.style.display = 'block'; interactHintEl.textContent = interactText; } else { interactHintEl.style.display = 'none'; interactHintEl.textContent = ''; }
+  // --- END NEW INTERACT HINT LOGIC ---
 
   if(gameStarted && !state.isDead){
     // detect climbable first (for hint)
